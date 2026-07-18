@@ -13,38 +13,25 @@ English | **[简体中文](./README.md)**
 
 ## Introduction
 
-DarkReader is a Windows system tray application that instantly switches the entire screen to dark mode. It uses the built-in Windows Magnification API (compositor-level color matrix) with zero frame latency and negligible CPU usage.
+DarkReader-Desktop is a Windows system tray application that switches the entire screen or a specified region to dark mode via color inversion, using the built-in Windows Magnification API (compositor-level color matrix).
 
 ## Screenshots
 
-<!-- TODO: add screenshots
-![Tray menu](docs/screenshot-tray.png)
-![Dark mode effect](docs/screenshot-dark-mode.png)
-![Region selection](docs/screenshot-region.png)
--->
-
-📷 Screenshots to be added.
+| Before | After |
+|--------|-------|
+| <img src="docs/screenshot-before.png" alt="Before" style="zoom:75%;" /> | <img src="docs/screenshot-dark-mode.png" alt="After" style="zoom:75%;" /> |
 
 ## Features
 
-- **One-click** dark mode toggle, zero frame latency (compositor-level color matrix)
-- **7 color modes**: Default + Preset 1-5 + Grayscale
-- **Window inversion**: effect limited to a specific window, with auto-follow/pause
-- **Region inversion**: effect limited to a screen rectangle
-- **Global hotkeys** that work even when another app is in focus
-- **Single-file publish**, no .NET Runtime installation required
-- **Smooth transitions**: 150ms animation to avoid abrupt flicker
-- **Persistent settings**, restored after restart
-- **Single instance**: second launch toggles the switch
+- **Multiple preset color modes**: Default (simple inversion) + Preset 1-5 + Grayscale
+- **Window following**: restrict the effect to a specific window
+- **Custom region**: restrict the effect to a specific rectangular area
 
 ## Download & Install
 
-1. Go to [Releases](https://github.com/CodingAQ/DarkReader-Desktop/releases) to download the latest package
+1. Go to [Releases](https://github.com/CodingAQ/DarkReader-Desktop/releases) to download the latest package (self-contained and framework-dependent versions available)
 2. Extract to any directory
 3. Double-click `DarkReader.exe` to start
-4. The app minimizes to the system tray (bottom-right notification area)
-
-> **First run**: If prompted that Windows Aero/DWM is not enabled, click "OK" to continue (some systems may not require Aero).
 
 ## Usage
 
@@ -52,21 +39,22 @@ DarkReader is a Windows system tray application that instantly switches the enti
 
 | Action | Effect |
 |--------|--------|
-| **Left-click** the tray icon | Toggle dark mode on/off |
-| **Right-click** the tray icon | Open the mode menu |
+| **Left-click** tray icon | Toggle dark mode on/off |
+| **Right-click** tray icon | Open the menu |
 
 ### Menu Options
 
 - **Toggle** — Turn dark mode on/off
-- **Default** — Simple color inversion (classic negative effect)
-- **Preset 1-5** — Five smart inversion modes (preserve hue, more comfortable)
-- **Grayscale** — Global grayscale (luminance-based, keeps dark tones)
-- **Select Region** — Choose an inversion region (current region shown in menu)
-- **Clear Region** — Clear region restriction, restore fullscreen
-- **Select Window** — Pick a target window from the list (auto-follow/resize/pause)
-- **Clear Window Target** — Clear window target
-- **Pause When Not Foreground** — Auto-pause when window loses focus (check to enable)
-- **Active On Startup** — Auto-enable dark mode on launch (check to enable)
+- **Mode** (recommends **Preset 3**)
+  - **Default** — Simple color inversion
+  - **Preset 1-5** — Five preset inversion modes (hue-preserving)
+  - **Grayscale** — Grayscale
+- **Select Region** — Select a region
+- **Clear Region** — Clear the selected region
+- **Select Window** — Select a target window
+- **Clear Window Target** — Clear the window target
+- **Pause When Not Foreground** — Auto-pause when window loses focus (recommended)
+- **Active On Startup** — Enable on launch
 - **Exit** — Quit the application
 
 ### Global Hotkeys
@@ -74,16 +62,11 @@ DarkReader is a Windows system tray application that instantly switches the enti
 | Hotkey | Function |
 |--------|----------|
 | `Win + Alt + N` | Toggle dark mode on/off |
-| `Win + Alt + 1` | Switch to: Default |
-| `Win + Alt + 2` | Switch to: Preset 1 |
-| `Win + Alt + 3` | Switch to: Preset 2 |
-| `Win + Alt + 4` | Switch to: Preset 3 |
-| `Win + Alt + 5` | Switch to: Preset 4 |
-| `Win + Alt + 6` | Switch to: Preset 5 |
-| `Win + Alt + R` | Select inversion region |
-| `Win + Alt + H` | Exit application |
-
-> Grayscale mode is only accessible via the menu; it has no hotkey binding.
+| `Win + Alt + 0` | Switch to Default |
+| `Win + Alt + [1-5]` | Switch to Preset 1-5 |
+| `Win + Alt + 6` | Switch to Grayscale |
+| `Win + Alt + R` | Select the dark mode region |
+| `Win + Alt + H` | Exit the application |
 
 ### Window Inversion
 
@@ -92,15 +75,7 @@ DarkReader can apply the inversion effect only to a specific window:
 | Action | Effect |
 |--------|--------|
 | Menu → **Select Window** → pick a window | Choose a target window from the list |
-| Menu → **Clear Window Target** | Clear the window target, restore fullscreen inversion |
-
-**Smart behavior**:
-- When the window moves, the inversion region **auto-follows**
-- When the window resizes, the inversion region **auto-adjusts**
-- When the window loses focus, the filter **auto-pauses** (resumes when refocused)
-- When the window closes, the target is auto-cleared
-
-> Toggle the "foreground pause" feature via the **Pause When Not Foreground** menu item.
+| Menu → **Clear Window Target** | Clear the window target, restore fullscreen |
 
 ### Region Inversion
 
@@ -108,17 +83,8 @@ DarkReader can restrict the inversion effect to a specific screen region:
 
 | Action | Effect |
 |--------|--------|
-| Menu → **Select Region** | Enter region selection mode, drag to choose the area |
-| Menu → **Clear Region** | Clear region restriction, restore fullscreen |
-| `Win + Alt + R` | Hotkey to enter region selection mode |
-
-**Region selection mode**:
-- A semi-transparent overlay covers the screen
-- **Left-drag** to select a rectangular area
-- **Right-click** or **Esc** to cancel
-- The selected area is highlighted
-
-> Region settings are auto-saved and restored on restart.
+| Menu → **Select Region** (`Win + Alt + R`) | Enter region selection mode |
+| Menu → **Clear Region** | Clear the selected region, restore fullscreen |
 
 ## 7 Color Modes
 
@@ -132,53 +98,10 @@ DarkReader can restrict the inversion effect to a specific screen region:
 | **Preset 5** | Medium saturation, CMY colors slightly desaturated, natural look |
 | **Grayscale** | Global grayscale mode, all pixels converted to grayscale by luminance, keeps dark tones |
 
-## Configuration
-
-Config file location: `%AppData%\DarkReader\settings.json`
-
-```json
-{
-  "ActiveMode": 0,
-  "ActiveOnStartup": false,
-  "SmoothTransitions": true,
-  "UseRegion": false,
-  "RegionX": 0,
-  "RegionY": 0,
-  "RegionWidth": 0,
-  "RegionHeight": 0,
-  "UseWindow": false,
-  "TargetWindowTitle": "",
-  "PauseWhenNotInForeground": true
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `ActiveMode` | Current mode (0=off, 1=Default, 2-6=Preset 1-5, 7=Grayscale) |
-| `ActiveOnStartup` | Whether to auto-enable on launch |
-| `SmoothTransitions` | Whether to enable 150ms smooth transition animation |
-| `UseRegion` | Whether region restriction is enabled |
-| `RegionX` | Region top-left X coordinate |
-| `RegionY` | Region top-left Y coordinate |
-| `RegionWidth` | Region width |
-| `RegionHeight` | Region height |
-| `UseWindow` | Whether window target mode is enabled |
-| `TargetWindowTitle` | Target window title (for display) |
-| `PauseWhenNotInForeground` | Whether to auto-pause when window loses focus |
-
-Settings are auto-saved when switching modes and restored on restart.
-
-## Single Instance
-
-Only one instance is allowed. If DarkReader is already running when you launch it again:
-- The new process sends a signal to the existing instance (toggles the switch)
-- The new process exits automatically
-
 ## System Requirements
 
 - Windows 10/11 64-bit
-- No .NET Runtime installation needed (bundled in the exe)
-- No administrator privileges required
+- `*_Framework.exe` requires .NET 8 Runtime or later
 
 ## Build from Source
 
@@ -188,18 +111,7 @@ Requires [.NET 8 SDK](https://dotnet.microsoft.com/download) or later.
 # Clone the repository
 git clone https://github.com/CodingAQ/DarkReader-Desktop.git
 cd DarkReader-Desktop
-
-# Restore dependencies and build
-dotnet build
-
-# Debug run
-dotnet run --project DarkReader
-
-# Publish single-file self-contained version (~68MB)
-dotnet publish DarkReader -c Release -r win-x64 --self-contained true -o Release
 ```
-
-Build output goes to the `Release/` directory. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ## Troubleshooting
 
@@ -210,21 +122,6 @@ Build output goes to the `Release/` directory. See [CONTRIBUTING.md](./CONTRIBUT
 | Tray icon not showing | Check Windows notification area settings, ensure DarkReader is not hidden |
 | Screen still inverted after exit | Restart the app and press `Win + Alt + N` to turn off, or restart Windows |
 
-## Uninstall
-
-1. Ensure DarkReader has exited (right-click tray icon → Exit)
-2. Delete the program folder
-3. (Optional) Delete config: `%AppData%\DarkReader\`
-
-## Acknowledgments
-
-- [NegativeScreen](https://github.com/mlaily/NegativeScreen) by [mlaily](https://github.com/mlaily) — the upstream foundation of this project
-- Tom MacLeod — inspiration for the Smart Inversion algorithm
-
 ## License
 
 This project is released under the [GPL-3.0](./LICENSE) license. Use, modification, and distribution must comply with the license terms.
-
-## Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md).

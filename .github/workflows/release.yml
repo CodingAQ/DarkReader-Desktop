@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Self-contained: bundles .NET Runtime (~68MB), no install needed
+      - name: Publish self-contained
+        run: dotnet publish DarkReader -c Release -r win-x64 --self-contained true -o publish/self-contained
+
+      # Framework-dependent: small size, requires .NET 8 Runtime installed
+      - name: Publish framework-dependent
+        run: dotnet publish DarkReader -c Release -r win-x64 --self-contained false -o publish/framework-dependent
+
+      - name: Package self-contained zip
+        run: Compress-Archive -Path publish/self-contained/* -DestinationPath DarkReader_${{ github.ref_name }}.zip
+
+      - name: Package framework-dependent zip
+        run: Compress-Archive -Path publish/framework-dependent/* -DestinationPath DarkReader_${{ github.ref_name }}_Framework.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            DarkReader_${{ github.ref_name }}.zip
+            DarkReader_${{ github.ref_name }}_Framework.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

@@ -358,13 +358,13 @@ namespace DarkReader
         {
             return mode switch
             {
-                1 => BuiltinMatrices.SimpleInversion,
-                2 => BuiltinMatrices.SmartInversion1,
-                3 => BuiltinMatrices.SmartInversion2,
-                4 => BuiltinMatrices.SmartInversion3,
-                5 => BuiltinMatrices.SmartInversion4,
-                6 => BuiltinMatrices.SmartInversion5,
-                7 => BuiltinMatrices.Grayscale,
+                0 => BuiltinMatrices.SimpleInversion,
+                1 => BuiltinMatrices.SmartInversion1,
+                2 => BuiltinMatrices.SmartInversion2,
+                3 => BuiltinMatrices.SmartInversion3,
+                4 => BuiltinMatrices.SmartInversion4,
+                5 => BuiltinMatrices.SmartInversion5,
+                6 => BuiltinMatrices.Grayscale,
                 _ => BuiltinMatrices.Identity
             };
         }
