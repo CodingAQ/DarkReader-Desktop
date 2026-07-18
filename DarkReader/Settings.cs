@@ -30,7 +30,7 @@ namespace DarkReader
 
         public static Settings Current { get; private set; } = new Settings();
 
-        public int ActiveMode { get; set; } = 0;
+        public int ActiveMode { get; set; } = -1;
         public bool ActiveOnStartup { get; set; } = false;
         public bool SmoothTransitions { get; set; } = true;
 
