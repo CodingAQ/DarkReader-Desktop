@@ -1,16 +1,48 @@
+# DarkReader
+
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](./LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-blue.svg)](#系统要求)
+[![Release](https://img.shields.io/github/v/release/CodingAQ/DarkReader-Desktop)](https://github.com/CodingAQ/DarkReader-Desktop/releases)
+
+**[English](./README.en.md)** | 简体中文
+
 > **致谢**：本项目基于 [NegativeScreen](https://github.com/mlaily/NegativeScreen)（作者 [mlaily](https://github.com/mlaily)，GPL-3.0）改进而成。
 > 主要改进：新增窗口翻转、区域翻转、托盘菜单交互重构等。
->  [GPL-3.0](./LICENSE) License. 
+> [GPL-3.0](./LICENSE) License.
 
 ## 简介
 
 DarkReader 是一个 Windows 系统托盘应用，一键将整个屏幕切换为深色模式。使用 Windows 内置的 Magnification API（合成器级色彩矩阵），零帧延迟、CPU 占用可忽略。
 
-## 下载运行
+## 截图
 
-1. 解压发布包到任意目录
-2. 双击 `DarkReader.exe` 启动
-3. 程序最小化到系统托盘（右下角通知区域）
+<!-- TODO: 添加截图
+![托盘菜单](docs/screenshot-tray.png)
+![深色模式效果](docs/screenshot-dark-mode.png)
+![区域选择](docs/screenshot-region.png)
+-->
+
+📷 截图待添加。
+
+## 特性
+
+- **一键切换**深色模式，零帧延迟（合成器级色彩矩阵）
+- **7 种色彩模式**：Default + Preset 1-5 + Grayscale
+- **窗口翻转**：效果限定在指定窗口，自动跟随/暂停
+- **区域翻转**：效果限定在屏幕矩形区域
+- **全局快捷键**，即使其他程序在前台也能触发
+- **单文件发布**，无需安装 .NET Runtime
+- **平滑过渡**：150ms 动画避免突兀闪烁
+- **配置持久化**，重启后恢复上次状态
+- **单实例运行**，二次启动切换开关
+
+## 下载与安装
+
+1. 前往 [Releases](https://github.com/CodingAQ/DarkReader-Desktop/releases) 下载最新发布包
+2. 解压到任意目录
+3. 双击 `DarkReader.exe` 启动
+4. 程序最小化到系统托盘（右下角通知区域）
 
 > **首次运行**：如果提示 Windows Aero/DWM 未启用，请点击"确定"继续（部分系统可能不需要 Aero）。
 
@@ -22,6 +54,36 @@ DarkReader 是一个 Windows 系统托盘应用，一键将整个屏幕切换为
 |------|------|
 | **左键单击** 托盘图标 | 切换 深色模式 开/关 |
 | **右键单击** 托盘图标 | 打开模式菜单 |
+
+### 菜单选项
+
+- **Toggle** — 切换深色模式开关
+- **Default** — 简单色彩反转（经典负片效果）
+- **Preset 1-5** — 5 种智能反转（保留色相，视觉更舒适）
+- **Grayscale** — 全局灰度（按亮度转换，黑色保持黑色调）
+- **Select Region** — 选择翻转区域（当前区域显示在菜单中）
+- **Clear Region** — 清除区域限制，恢复全屏
+- **Select Window** — 从列表中选择目标窗口（自动跟随/调整/暂停）
+- **Clear Window Target** — 清除窗口目标
+- **Pause When Not Foreground** — 窗口不在前台时自动暂停（勾选启用）
+- **Active On Startup** — 启动时自动开启暗色模式（勾选启用）
+- **Exit** — 退出程序
+
+### 全局快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Win + Alt + N` | 切换深色模式 开/关 |
+| `Win + Alt + 1` | 切换到：Default |
+| `Win + Alt + 2` | 切换到：Preset 1 |
+| `Win + Alt + 3` | 切换到：Preset 2 |
+| `Win + Alt + 4` | 切换到：Preset 3 |
+| `Win + Alt + 5` | 切换到：Preset 4 |
+| `Win + Alt + 6` | 切换到：Preset 5 |
+| `Win + Alt + R` | 选择翻转区域 |
+| `Win + Alt + H` | 退出程序 |
+
+> Grayscale 模式只能通过菜单选择，未绑定快捷键。
 
 ### 窗口翻转
 
@@ -58,46 +120,16 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 
 > 区域设置会自动保存，重启后恢复。
 
-### 菜单选项
-
-- **Toggle** — 切换深色模式开关
-- **Simple Inversion** — 简单色彩反转（经典负片效果）
-- **Smart Inversion 1-5** — 5 种智能反转（保留色相，视觉更舒适）
-- **Grayscale** — 全局灰度（按亮度转换，黑色保持黑色调）
-- **Select Region** — 选择翻转区域（当前区域显示在菜单中）
-- **Clear Region** — 清除区域限制，恢复全屏
-- **Select Window** — 从列表中选择目标窗口（自动跟随/调整/暂停）
-- **Clear Window Target** — 清除窗口目标
-- **Pause When Not Foreground** — 窗口不在前台时自动暂停（勾选启用）
-- **Active On Startup** — 启动时自动开启暗色模式（勾选启用）
-- **Exit** — 退出程序
-
-### 全局快捷键
-
-| 快捷键 | 功能 |
-|--------|------|
-| `Win + Alt + N` | 切换深色模式 开/关 |
-| `Win + Alt + 1` | 切换到：简单反转 |
-| `Win + Alt + 2` | 切换到：智能反转 1 |
-| `Win + Alt + 3` | 切换到：智能反转 2 |
-| `Win + Alt + 4` | 切换到：智能反转 3 |
-| `Win + Alt + 5` | 切换到：智能反转 4 |
-| `Win + Alt + 6` | 切换到：灰度 |
-| `Win + Alt + R` | 选择翻转区域 |
-| `Win + Alt + H` | 退出程序 |
-
-
-
-## 6 种暗色模式说明
+## 7 种色彩模式说明
 
 | 模式 | 说明 |
 |------|------|
-| **Simple Inversion** | 简单 RGB 反转，效果强烈，适合高对比度需求 |
-| **Smart Inversion 1** | 理论最优变换（Tom MacLeod 方案），色彩准确但可能过饱和 |
-| **Smart Inversion 2** | 最简洁的 180° 色相偏移，高饱和度，纯色表现好 |
-| **Smart Inversion 3** | 整体去饱和，黄色和蓝色偏暗，适合长时间阅读 |
-| **Smart Inversion 4** | 高饱和度，黄色和蓝色偏暗，可读性较好 |
-| **Smart Inversion 5** | 中等饱和度，CMY 色彩轻微去饱和，颜色自然 |
+| **Default** | 简单 RGB 反转，效果强烈，适合高对比度需求 |
+| **Preset 1** | 理论最优变换（Tom MacLeod 方案），色彩准确但可能过饱和 |
+| **Preset 2** | 最简洁的 180° 色相偏移，高饱和度，纯色表现好 |
+| **Preset 3** | 整体去饱和，黄色和蓝色偏暗，适合长时间阅读 |
+| **Preset 4** | 高饱和度，黄色和蓝色偏暗，可读性较好 |
+| **Preset 5** | 中等饱和度，CMY 色彩轻微去饱和，颜色自然 |
 | **Grayscale** | 全局灰度模式，所有像素按亮度转为灰度，黑色保持深色调 |
 
 ## 配置
@@ -122,7 +154,7 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 
 | 字段 | 说明 |
 |------|------|
-| `ActiveMode` | 当前模式（0=关闭, 1=简单反转, 2-6=智能反转, 7=灰度） |
+| `ActiveMode` | 当前模式（0=关闭, 1=Default, 2-6=Preset 1-5, 7=Grayscale） |
 | `ActiveOnStartup` | 启动时是否自动开启 |
 | `SmoothTransitions` | 是否启用 150ms 平滑过渡动画 |
 | `UseRegion` | 是否启用区域限制 |
@@ -145,8 +177,29 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 ## 系统要求
 
 - Windows 10/11 64位
-- .NET 8 Runtime（已内置在 exe 中，无需额外安装）
+- 无需安装 .NET Runtime（已内置在 exe 中）
 - 无需管理员权限
+
+## 从源码构建
+
+需要 [.NET 8 SDK](https://dotnet.microsoft.com/download) 或更高版本。
+
+```bash
+# 克隆仓库
+git clone https://github.com/CodingAQ/DarkReader-Desktop.git
+cd DarkReader-Desktop
+
+# 还原依赖并构建
+dotnet build
+
+# 调试运行
+dotnet run --project DarkReader
+
+# 发布单文件自包含版本（约 68MB）
+dotnet publish DarkReader -c Release -r win-x64 --self-contained true -o Release
+```
+
+构建产物在 `Release/` 目录下。详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## 故障排除
 
@@ -162,3 +215,16 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 1. 确保 DarkReader 已退出（右键托盘图标 → Exit）
 2. 删除程序文件夹
 3. （可选）删除配置：`%AppData%\DarkReader\`
+
+## 致谢
+
+- [NegativeScreen](https://github.com/mlaily/NegativeScreen) by [mlaily](https://github.com/mlaily) — 本项目的上游基础
+- [Tom MacLeod](https://github.com/mlaily/NegativeScreen) — Smart Inversion 算法灵感来源
+
+## 许可证
+
+本项目基于 [GPL-3.0](./LICENSE) 许可证发布。使用、修改、分发请遵循该许可证条款。
+
+## 变更记录
+
+详见 [CHANGELOG.md](./CHANGELOG.md)。
