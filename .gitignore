@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------
+# DarkReader .gitignore
+# Based on GitHub's VisualStudio .gitignore template, trimmed
+# for this project.
+# ---------------------------------------------------------------
+
+# ---- Build output ----
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# ---- Visual Studio / Rider / VS Code ----
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.rsuser
+*.dotCover
+*.coverage
+*.coveragexml
+
+# ---- NuGet ----
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.assets.json
+project.nuget.cache
+*.csproj.nuget.*
+
+# ---- Publish / self-contained output ----
+publish/
+publish_output/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+PublishProfiles/
+
+# ---- Local runtime artifacts ----
+*.pdb
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.ipdb
+*.idb
+*.tlog
+
+# ---- OS files ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ---- Editor / AI tool local caches ----
+.codegraph/
+.omo/
+.coderabbit/
+.cursor/
+.github/copilot/
+*.log
+
+# ---- Project-specific: pre-built release binaries ----
+# Release binaries are distributed via GitHub Releases, not committed.
+/Release/
+/Release/*
+
+# ---- Temporary files ----
+*.tmp
+*.bak
+*.swp
+*~
+tree.txt

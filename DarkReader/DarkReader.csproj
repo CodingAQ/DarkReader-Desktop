@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>false</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>DarkReader</RootNamespace>
+    <AssemblyName>DarkReader</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(PublishSelfContained)' != ''">true</EnableCompressionInSingleFile>
+    <SelfContained Condition="'$(PublishSelfContained)' != ''">$(PublishSelfContained)</SelfContained>
+  </PropertyGroup>
+
+</Project>
