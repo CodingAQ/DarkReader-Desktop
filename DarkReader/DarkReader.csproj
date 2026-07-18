@@ -13,7 +13,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(SelfContained)' != ''">true</EnableCompressionInSingleFile>
     <SelfContained Condition="'$(PublishSelfContained)' != ''">$(PublishSelfContained)</SelfContained>
     <ApplicationIcon>icon.ico</ApplicationIcon>
 

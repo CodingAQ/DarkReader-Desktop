@@ -52,6 +52,7 @@ namespace DarkReader
 
         // Hotkey IDs
         private const int HOTKEY_TOGGLE = 1;
+        private const int HOTKEY_MODE0 = 9;
         private const int HOTKEY_MODE1 = 2;
         private const int HOTKEY_MODE2 = 3;
         private const int HOTKEY_MODE3 = 4;
@@ -83,13 +84,13 @@ namespace DarkReader
             contextMenu.Items.Add(toggleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
 
-            var mode1Item = new ToolStripMenuItem("Default", null, (s, e) => SetMode(1));
-            var mode2Item = new ToolStripMenuItem("Preset 1", null, (s, e) => SetMode(2));
-            var mode3Item = new ToolStripMenuItem("Preset 2", null, (s, e) => SetMode(3));
-            var mode4Item = new ToolStripMenuItem("Preset 3", null, (s, e) => SetMode(4));
-            var mode5Item = new ToolStripMenuItem("Preset 4", null, (s, e) => SetMode(5));
-            var mode6Item = new ToolStripMenuItem("Preset 5", null, (s, e) => SetMode(6));
-            var mode7Item = new ToolStripMenuItem("Grayscale", null, (s, e) => SetMode(7));
+            var mode1Item = new ToolStripMenuItem("Default", null, (s, e) => SetMode(0));
+            var mode2Item = new ToolStripMenuItem("Preset 1", null, (s, e) => SetMode(1));
+            var mode3Item = new ToolStripMenuItem("Preset 2", null, (s, e) => SetMode(2));
+            var mode4Item = new ToolStripMenuItem("Preset 3", null, (s, e) => SetMode(3));
+            var mode5Item = new ToolStripMenuItem("Preset 4", null, (s, e) => SetMode(4));
+            var mode6Item = new ToolStripMenuItem("Preset 5", null, (s, e) => SetMode(5));
+            var mode7Item = new ToolStripMenuItem("Grayscale", null, (s, e) => SetMode(6));
 
             contextMenu.Items.Add(mode1Item);
             contextMenu.Items.Add(mode2Item);
@@ -158,13 +159,14 @@ namespace DarkReader
             toggle.Checked = effectActive;
             for (int i = 0; i < modes.Length; i++)
             {
-                modes[i].Checked = effectActive && currentMode == i + 1;
+                modes[i].Checked = effectActive && currentMode == i;
             }
         }
 
         private void RegisterHotKeys()
         {
             NativeMethods.RegisterHotKey(this.Handle, HOTKEY_TOGGLE, KeyModifiers.MOD_WIN | KeyModifiers.MOD_ALT, Keys.N);
+            NativeMethods.RegisterHotKey(this.Handle, HOTKEY_MODE0, KeyModifiers.MOD_WIN | KeyModifiers.MOD_ALT, Keys.D0);
             NativeMethods.RegisterHotKey(this.Handle, HOTKEY_MODE1, KeyModifiers.MOD_WIN | KeyModifiers.MOD_ALT, Keys.D1);
             NativeMethods.RegisterHotKey(this.Handle, HOTKEY_MODE2, KeyModifiers.MOD_WIN | KeyModifiers.MOD_ALT, Keys.D2);
             NativeMethods.RegisterHotKey(this.Handle, HOTKEY_MODE3, KeyModifiers.MOD_WIN | KeyModifiers.MOD_ALT, Keys.D3);
@@ -178,6 +180,7 @@ namespace DarkReader
         private void UnregisterHotKeys()
         {
             NativeMethods.UnregisterHotKey(this.Handle, HOTKEY_TOGGLE);
+            NativeMethods.UnregisterHotKey(this.Handle, HOTKEY_MODE0);
             NativeMethods.UnregisterHotKey(this.Handle, HOTKEY_MODE1);
             NativeMethods.UnregisterHotKey(this.Handle, HOTKEY_MODE2);
             NativeMethods.UnregisterHotKey(this.Handle, HOTKEY_MODE3);
@@ -603,12 +606,13 @@ namespace DarkReader
                 switch (id)
                 {
                     case HOTKEY_TOGGLE: Toggle(); return;
+                    case HOTKEY_MODE0: SetMode(0); return;
                     case HOTKEY_MODE1: SetMode(1); return;
                     case HOTKEY_MODE2: SetMode(2); return;
                     case HOTKEY_MODE3: SetMode(3); return;
                     case HOTKEY_MODE4: SetMode(4); return;
                      case HOTKEY_MODE5: SetMode(5); return;
-                     case HOTKEY_MODE6: SetMode(7); return;
+                     case HOTKEY_MODE6: SetMode(6); return;
                      case HOTKEY_REGION: OnSelectRegionClick(null, null); return;
                      case HOTKEY_EXIT: ExitApp(); return;
                 }
@@ -648,7 +652,7 @@ namespace DarkReader
             }
 
             // Restore saved mode (activates effect)
-            if (Settings.Current.ActiveMode > 0)
+            if (Settings.Current.ActiveMode >= 0)
             {
                 SetMode(Settings.Current.ActiveMode);
             }
