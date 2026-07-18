@@ -13,8 +13,25 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishSingleFile>true</PublishSingleFile>
-    <EnableCompressionInSingleFile Condition="'$(PublishSelfContained)' != ''">true</EnableCompressionInSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <SelfContained Condition="'$(PublishSelfContained)' != ''">$(PublishSelfContained)</SelfContained>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+
+    <!-- Package metadata -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Authors>DarkReader Contributors</Authors>
+    <Company>DarkReader</Company>
+    <Product>DarkReader</Product>
+    <Description>Windows 系统托盘深色模式切换工具，基于 Magnification API 实现零延迟色彩翻转。</Description>
+    <Copyright>Copyright (C) 2026 DarkReader Contributors</Copyright>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/CodingAQ/DarkReader-Desktop</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/CodingAQ/DarkReader-Desktop.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>windows;dark-mode;magnification;color-inversion;winforms;dotnet</PackageTags>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
   </PropertyGroup>
 
 </Project>

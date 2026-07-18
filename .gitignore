@@ -75,12 +75,12 @@ $RECYCLE.BIN/
 .coderabbit/
 .cursor/
 .github/copilot/
+.workbuddy/
 *.log
 
 # ---- Project-specific: pre-built release binaries ----
 # Release binaries are distributed via GitHub Releases, not committed.
 /Release/
-/Release/*
 
 # ---- Temporary files ----
 *.tmp
@@ -88,3 +88,5 @@ $RECYCLE.BIN/
 *.swp
 *~
 tree.txt
+/res/
+

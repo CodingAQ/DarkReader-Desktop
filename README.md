@@ -1,8 +1,6 @@
-# DarkReader 使用教程
-
-> **致谢与衍生声明**：本项目基于 [NegativeScreen](https://github.com/mlaily/NegativeScreen)（作者 [mlaily](https://github.com/mlaily)，GPL-3.0）改进而成，在此对原作者表示感谢。
-> 主要改进：迁移至 .NET 8 / WinForms、单文件自包含发布、新增窗口翻转、区域翻转、平滑过渡、托盘菜单交互重构等。
-> 本项目同样采用 [GPL-3.0](./LICENSE) 许可证。
+> **致谢**：本项目基于 [NegativeScreen](https://github.com/mlaily/NegativeScreen)（作者 [mlaily](https://github.com/mlaily)，GPL-3.0）改进而成。
+> 主要改进：新增窗口翻转、区域翻转、托盘菜单交互重构等。
+>  [GPL-3.0](./LICENSE) License. 
 
 ## 简介
 
@@ -88,7 +86,7 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 | `Win + Alt + R` | 选择翻转区域 |
 | `Win + Alt + H` | 退出程序 |
 
-> 快捷键全局有效，即使其他程序在焦点也能触发。
+
 
 ## 6 种暗色模式说明
 

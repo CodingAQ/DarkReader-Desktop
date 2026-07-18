@@ -83,12 +83,12 @@ namespace DarkReader
             contextMenu.Items.Add(toggleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
 
-            var mode1Item = new ToolStripMenuItem("Simple Inversion", null, (s, e) => SetMode(1));
-            var mode2Item = new ToolStripMenuItem("Smart Inversion 1", null, (s, e) => SetMode(2));
-            var mode3Item = new ToolStripMenuItem("Smart Inversion 2", null, (s, e) => SetMode(3));
-            var mode4Item = new ToolStripMenuItem("Smart Inversion 3", null, (s, e) => SetMode(4));
-            var mode5Item = new ToolStripMenuItem("Smart Inversion 4", null, (s, e) => SetMode(5));
-            var mode6Item = new ToolStripMenuItem("Smart Inversion 5", null, (s, e) => SetMode(6));
+            var mode1Item = new ToolStripMenuItem("Default", null, (s, e) => SetMode(1));
+            var mode2Item = new ToolStripMenuItem("Preset 1", null, (s, e) => SetMode(2));
+            var mode3Item = new ToolStripMenuItem("Preset 2", null, (s, e) => SetMode(3));
+            var mode4Item = new ToolStripMenuItem("Preset 3", null, (s, e) => SetMode(4));
+            var mode5Item = new ToolStripMenuItem("Preset 4", null, (s, e) => SetMode(5));
+            var mode6Item = new ToolStripMenuItem("Preset 5", null, (s, e) => SetMode(6));
             var mode7Item = new ToolStripMenuItem("Grayscale", null, (s, e) => SetMode(7));
 
             contextMenu.Items.Add(mode1Item);
