@@ -199,6 +199,11 @@ namespace DarkReader
         [DllImport("dwmapi.dll", PreserveSig = false, SetLastError = true)]
         public static extern bool DwmIsCompositionEnabled();
 
+        [DllImport("dwmapi.dll", PreserveSig = false)]
+        public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+
+        public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
         #endregion
     }
 

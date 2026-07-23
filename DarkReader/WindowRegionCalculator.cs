@@ -6,18 +6,42 @@ namespace DarkReader
 {
     public static class WindowRegionCalculator
     {
+        /// <summary>
+        /// Get the visible window rectangle (excluding invisible extended frame).
+        /// Uses DwmGetWindowAttribute for accurate bounds on Windows 10/11.
+        /// </summary>
+        private static Rectangle GetVisibleWindowRect(IntPtr hwnd)
+        {
+            // Try DWM extended frame bounds first (accurate visible bounds)
+            RECT rect;
+            int hr = NativeMethods.DwmGetWindowAttribute(hwnd, NativeMethods.DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf(typeof(RECT)));
+            if (hr >= 0)
+            {
+                return new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+            }
+
+            // Fallback to GetWindowRect
+            if (NativeMethods.GetWindowRect(hwnd, out rect))
+            {
+                return new Rectangle(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+            }
+
+            return Rectangle.Empty;
+        }
         public static RegionInfo CalculateVisibleRegion(IntPtr targetHwnd, IntPtr excludeHwnd = default)
         {
             var info = new RegionInfo();
 
-            if (!NativeMethods.GetWindowRect(targetHwnd, out RECT targetRect))
+            // Get target window visible rectangle (excluding invisible extended frame)
+            Rectangle targetRect = GetVisibleWindowRect(targetHwnd);
+            if (targetRect.IsEmpty)
             {
                 info.IsEmpty = true;
                 return info;
             }
 
-            int width = targetRect.right - targetRect.left;
-            int height = targetRect.bottom - targetRect.top;
+            int width = targetRect.Width;
+            int height = targetRect.Height;
 
             if (width <= 0 || height <= 0)
             {
@@ -25,7 +49,7 @@ namespace DarkReader
                 return info;
             }
 
-            IntPtr hRgn = NativeMethods.CreateRectRgn(targetRect.left, targetRect.top, targetRect.right, targetRect.bottom);
+            IntPtr hRgn = NativeMethods.CreateRectRgn(targetRect.Left, targetRect.Top, targetRect.Right, targetRect.Bottom);
             if (hRgn == IntPtr.Zero)
             {
                 info.IsEmpty = true;
@@ -38,15 +62,16 @@ namespace DarkReader
                 // Skip target window itself and the excluded window (e.g., our own overlay)
                 if (NativeMethods.IsWindowVisible(current) && current != targetHwnd && current != excludeHwnd)
                 {
-                    if (NativeMethods.GetWindowRect(current, out RECT coverRect))
+                    Rectangle coverRect = GetVisibleWindowRect(current);
+                    if (!coverRect.IsEmpty)
                     {
-                        int coverW = coverRect.right - coverRect.left;
-                        int coverH = coverRect.bottom - coverRect.top;
+                        int coverW = coverRect.Width;
+                        int coverH = coverRect.Height;
 
                         if (coverW > 0 && coverH > 0)
                         {
                             IntPtr hCoverRgn = NativeMethods.CreateRectRgn(
-                                coverRect.left, coverRect.top, coverRect.right, coverRect.bottom);
+                                coverRect.Left, coverRect.Top, coverRect.Right, coverRect.Bottom);
 
                             if (hCoverRgn != IntPtr.Zero)
                             {
