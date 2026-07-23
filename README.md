@@ -53,9 +53,8 @@ DarkReader-Desktop 是一个 Windows 系统托盘应用，将整个屏幕或指�
   - **Grayscale** — 灰度
 - **Select Region** — 选择区域
 - **Clear Region** — 清除选择区域
-- **Select Window** — 选择目标窗口
+- **Select Window** — 选择目标窗口（智能覆盖）
 - **Clear Window Target** — 清除窗口目标
-- **Pause When Not Foreground** — 窗口不在前台时自动暂停（推荐启用）
 - **Active On Startup** — 启动时启用
 - **Exit** — 退出程序
 
@@ -78,6 +77,8 @@ DarkReader 支持将翻转效果只应用到指定窗口：
 |------|------|
 | 菜单 → **Select Window** → 选择窗口 | 从列表中选择目标窗口 |
 | 菜单 → **Clear Window Target** | 清除窗口目标，恢复全屏区域 |
+
+> 窗口被其他窗口遮挡时，滤镜只覆盖可见部分
 
 ### 区域翻转
 

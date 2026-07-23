@@ -25,7 +25,7 @@ namespace DarkReader
 {
     /// <summary>
     /// Tracks a target window's position and size, invoking a callback when it changes.
-    /// Polls at ~60fps for smooth following.
+    /// Polls at 10fps for smooth following.
     /// </summary>
     public class WindowTracker : IDisposable
     {
@@ -35,7 +35,7 @@ namespace DarkReader
         private bool _disposed;
         private Rectangle _lastRect;
         private readonly object _lock = new object();
-        private Action<Rectangle> _onRectChanged;
+        private Action _onWindowChanged;
         Action _onWindowClosed;
 
         public bool IsTracking => _running;
@@ -44,12 +44,12 @@ namespace DarkReader
         /// <summary>
         /// Start tracking a window by its handle.
         /// </summary>
-        public void StartTracking(IntPtr hwnd, Action<Rectangle> onRectChanged, Action onWindowClosed = null)
+        public void StartTracking(IntPtr hwnd, Action onWindowChanged, Action onWindowClosed = null)
         {
             if (_running) StopTracking();
 
             _targetHwnd = hwnd;
-            _onRectChanged = onRectChanged;
+            _onWindowChanged = onWindowChanged;
             _onWindowClosed = onWindowClosed;
             _running = true;
 
@@ -68,21 +68,21 @@ namespace DarkReader
             };
             _pollThread.Start();
 
-            // Fire callback with initial rect so overlay appears immediately
+            // Fire callback immediately so overlay appears immediately
             if (_lastRect.Width > 0 && _lastRect.Height > 0)
             {
-                _onRectChanged?.Invoke(_lastRect);
+                _onWindowChanged?.Invoke();
             }
         }
 
         /// <summary>
         /// Start tracking using a window title match (partial match).
         /// </summary>
-        public bool StartTrackingByTitle(string titleSubstring, Action<Rectangle> onRectChanged, Action onWindowClosed = null)
+        public bool StartTrackingByTitle(string titleSubstring, Action onWindowChanged, Action onWindowClosed = null)
         {
             var hwnd = FindWindowByTitle(titleSubstring);
             if (hwnd == IntPtr.Zero) return false;
-            StartTracking(hwnd, onRectChanged, onWindowClosed);
+            StartTracking(hwnd, onWindowChanged, onWindowClosed);
             return true;
         }
 
@@ -119,7 +119,7 @@ namespace DarkReader
                         if (newRect != _lastRect)
                         {
                             _lastRect = newRect;
-                            _onRectChanged?.Invoke(newRect);
+                            _onWindowChanged?.Invoke();
                         }
                     }
                 }

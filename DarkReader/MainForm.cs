@@ -42,13 +42,13 @@ namespace DarkReader
         private bool _lastShowDecision = false; // last shouldShow state
         private IntPtr _winEventHook = IntPtr.Zero;
         private NativeMethods.WinEventProc _winEventProc; // keep reference to prevent GC
+        private RegionInfo _currentRegionInfo; // current visible region (for window mode)
 
         // Window targeting
         private WindowTracker _windowTracker;
         private IntPtr? _targetWindow;
         private string _targetWindowTitle;
         private bool _useWindow = false;
-        private bool _pauseWhenNotInForeground = true;
 
         // Hotkey IDs
         private const int HOTKEY_TOGGLE = 1;
@@ -111,11 +111,9 @@ namespace DarkReader
             // Window targeting menu
             var selectWindowItem = new ToolStripMenuItem("Select Window");
             var clearWindowItem = new ToolStripMenuItem("Clear Window Target", null, OnClearWindowClick);
-            var pauseCheckItem = new ToolStripMenuItem("Pause When Not Foreground", null, OnTogglePauseCheck) { Checked = true };
             var startupItem = new ToolStripMenuItem("Active On Startup", null, OnToggleStartup) { Checked = Settings.Current.ActiveOnStartup };
             contextMenu.Items.Add(selectWindowItem);
             contextMenu.Items.Add(clearWindowItem);
-            contextMenu.Items.Add(pauseCheckItem);
             contextMenu.Items.Add(startupItem);
             contextMenu.Items.Add(new ToolStripSeparator());
 
@@ -133,7 +131,6 @@ namespace DarkReader
                 selectWindowItem.Checked = _useWindow;
                 selectWindowItem.Text = _useWindow ? $"Window: {_targetWindowTitle}" : "Select Window...";
                 clearWindowItem.Enabled = _useWindow;
-                pauseCheckItem.Checked = _pauseWhenNotInForeground;
                 startupItem.Checked = Settings.Current.ActiveOnStartup;
             };
 
@@ -194,9 +191,10 @@ namespace DarkReader
         private void InstallForegroundHook()
         {
             _winEventProc = new NativeMethods.WinEventProc(OnWinEvent);
+            // Hook LOCATIONCHANGE to detect any window move/resize/Z-order change
             _winEventHook = NativeMethods.SetWinEventHook(
-                NativeMethods.EVENT_SYSTEM_FOREGROUND,
-                NativeMethods.EVENT_SYSTEM_FOREGROUND,
+                NativeMethods.EVENT_OBJECT_LOCATIONCHANGE,
+                NativeMethods.EVENT_OBJECT_LOCATIONCHANGE,
                 IntPtr.Zero,
                 _winEventProc,
                 0, 0,
@@ -214,8 +212,11 @@ namespace DarkReader
 
         private void OnWinEvent(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            // Foreground window changed - wake control loop to re-evaluate
-            if (_useWindow && _pauseWhenNotInForeground)
+            // Only respond to window objects (not menus, cursors, etc.)
+            if (idObject != 0) return; // OBJID_WINDOW = 0
+
+            // Any window moved/resized/reordered - visible region may have changed
+            if (_useWindow && hwnd != IntPtr.Zero)
             {
                 lock (controlLock)
                 {
@@ -284,45 +285,74 @@ namespace DarkReader
 
         private void ApplyCurrentEffect()
         {
-            // Determine if effect should be visible
-            bool shouldShow = true;
-            if (_useWindow && _pauseWhenNotInForeground && _targetWindow.HasValue)
+            if (_useWindow)
             {
-                var fg = NativeMethods.GetForegroundWindow();
-                if (fg != _targetWindow.Value)
-                    shouldShow = false;
-            }
-
-            if (!shouldShow)
-            {
-                // Effect should be hidden - clear if currently shown
-                if (_lastShowDecision)
+                // Window tracking mode - calculate visible region
+                if (!_targetWindow.HasValue)
                 {
                     EnsureRegionOverlayDestroyed();
-                    BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
-                    _lastShowDecision = false;
+                    if (_lastShowDecision)
+                    {
+                        BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
+                        _lastShowDecision = false;
+                    }
+                    return;
                 }
-                return;
-            }
 
-            // Effect should be visible - always re-apply (DWM may have cleared it)
-            if ((_useRegion && _region.HasValue) || _useWindow)
+                // Calculate visible region (areas not covered by other windows)
+                // Exclude our own overlay window from the covering calculation
+                IntPtr overlayHwnd = _regionOverlay?.WindowHandle ?? IntPtr.Zero;
+                var region = WindowRegionCalculator.CalculateVisibleRegion(_targetWindow.Value, overlayHwnd);
+
+                if (region.IsEmpty)
+                {
+                    // Fully covered - set region to empty to hide overlay
+                    if (_lastShowDecision)
+                    {
+                        if (_regionOverlay != null && _regionOverlay.IsCreated)
+                        {
+                            var emptyRegion = new RegionInfo { IsEmpty = true };
+                            _regionOverlay.UpdateRegion(emptyRegion);
+                        }
+                        BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
+                        _lastShowDecision = false;
+                        _currentRegionInfo = region;
+                    }
+                }
+                else
+                {
+                    // Partially or fully visible - show overlay with region shape
+                    EnsureRegionOverlay(region);
+                    _regionOverlay.ApplyColorEffect(currentMatrix);
+                    _regionOverlay.UpdateRegion(region);
+                    _currentRegionInfo = region;
+                    _lastShowDecision = true;
+                }
+            }
+            else if (_useRegion && _region.HasValue)
             {
-                // Region/window mode
+                // Manual region mode - use rectangle
                 bool regionChanged = _region.Value != _lastAppliedRegion;
-                EnsureRegionOverlay();
+                var regionInfo = new RegionInfo
+                {
+                    HRgn = IntPtr.Zero,
+                    Bounds = _region.Value,
+                    IsEmpty = false
+                };
+                EnsureRegionOverlay(regionInfo);
                 _regionOverlay.ApplyColorEffect(currentMatrix);
                 if (regionChanged || !_lastShowDecision)
-                    _regionOverlay.UpdateRegion(_region.Value);
+                    _regionOverlay.UpdateRegion(regionInfo);
                 _lastAppliedRegion = _region.Value;
+                _lastShowDecision = true;
             }
             else
             {
                 // Fullscreen mode
                 EnsureRegionOverlayDestroyed();
                 BuiltinMatrices.ApplyMatrix(currentMatrix);
+                _lastShowDecision = true;
             }
-            _lastShowDecision = true;
         }
 
         private void CleanupEffect()
@@ -336,6 +366,21 @@ namespace DarkReader
             catch { }
         }
 
+        private void EnsureRegionOverlay(RegionInfo region)
+        {
+            if (_regionOverlay == null)
+                _regionOverlay = new RegionOverlay();
+
+            if (!_regionOverlay.IsCreated && !region.IsEmpty)
+            {
+                _regionOverlay.Show(region);
+            }
+            else if (_regionOverlay.IsCreated && !region.IsEmpty)
+            {
+                _regionOverlay.UpdateRegion(region);
+            }
+        }
+
         private void EnsureRegionOverlay()
         {
             if (_regionOverlay == null)
@@ -343,11 +388,23 @@ namespace DarkReader
 
             if (!_regionOverlay.IsCreated && _region.HasValue)
             {
-                _regionOverlay.Show(_region.Value);
+                var regionInfo = new RegionInfo
+                {
+                    HRgn = IntPtr.Zero,
+                    Bounds = _region.Value,
+                    IsEmpty = false
+                };
+                _regionOverlay.Show(regionInfo);
             }
             else if (_regionOverlay.IsCreated && _region.HasValue)
             {
-                _regionOverlay.UpdateRegion(_region.Value);
+                var regionInfo = new RegionInfo
+                {
+                    HRgn = IntPtr.Zero,
+                    Bounds = _region.Value,
+                    IsEmpty = false
+                };
+                _regionOverlay.UpdateRegion(regionInfo);
             }
         }
 
@@ -395,6 +452,8 @@ namespace DarkReader
                     Monitor.Pulse(controlLock);
                 }
             }
+            // Invalidate overlay matrix so it re-applies
+            _regionOverlay?.InvalidateMatrix();
             Settings.Current.ActiveMode = mode;
             Settings.Save();
             UpdateTrayTip();
@@ -502,13 +561,6 @@ namespace DarkReader
             UpdateTrayTip();
         }
 
-        private void OnTogglePauseCheck(object sender, EventArgs e)
-        {
-            _pauseWhenNotInForeground = !_pauseWhenNotInForeground;
-            Settings.Current.PauseWhenNotInForeground = _pauseWhenNotInForeground;
-            Settings.Save();
-        }
-
         private void OnToggleStartup(object sender, EventArgs e)
         {
             Settings.Current.ActiveOnStartup = !Settings.Current.ActiveOnStartup;
@@ -535,7 +587,7 @@ namespace DarkReader
 
             // Start tracker
             _windowTracker = new WindowTracker();
-            _windowTracker.StartTracking(hwnd, OnWindowRectChanged, OnTargetWindowClosed);
+            _windowTracker.StartTracking(hwnd, OnWindowChanged, OnTargetWindowClosed);
 
             // Save settings
             Settings.Current.UseWindow = true;
@@ -556,12 +608,10 @@ namespace DarkReader
             _useWindow = false;
         }
 
-        private void OnWindowRectChanged(Rectangle newRect)
+        private void OnWindowChanged()
         {
-            // Called from tracker thread - update region
-            _region = newRect;
-
-            // Update overlay on control thread
+            // Called from tracker thread when window position/size changes
+            // Wake control loop to recalculate visible region
             lock (controlLock)
             {
                 Monitor.Pulse(controlLock);
@@ -575,6 +625,7 @@ namespace DarkReader
             {
                 StopWindowTracking();
                 _region = null;
+                _currentRegionInfo = default;
                 _lastShowDecision = false;
                 Settings.Current.UseWindow = false;
                 Settings.Save();
@@ -637,9 +688,6 @@ namespace DarkReader
                     Settings.Current.RegionWidth, Settings.Current.RegionHeight);
                 _useRegion = true;
             }
-
-            // Restore pause setting
-            _pauseWhenNotInForeground = Settings.Current.PauseWhenNotInForeground;
 
             // Restore window tracking
             if (Settings.Current.UseWindow && !string.IsNullOrEmpty(Settings.Current.TargetWindowTitle))
