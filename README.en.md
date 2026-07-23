@@ -77,6 +77,8 @@ DarkReader can apply the inversion effect only to a specific window:
 | Menu → **Select Window** → pick a window | Choose a target window from the list |
 | Menu → **Clear Window Target** | Clear the window target, restore fullscreen |
 
+> When the window is obscured by other windows, the filter only covers the visible parts.
+
 ### Region Inversion
 
 DarkReader can restrict the inversion effect to a specific screen region:
