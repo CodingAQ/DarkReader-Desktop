@@ -28,7 +28,23 @@ namespace DarkReader
 
             return Rectangle.Empty;
         }
-        public static RegionInfo CalculateVisibleRegion(IntPtr targetHwnd, IntPtr excludeHwnd = default)
+        /// <summary>
+        /// Check if a window is cloaked by DWM (e.g., on another virtual desktop, behind secure desktop).
+        /// </summary>
+        private static bool IsDwmCloaked(IntPtr hwnd)
+        {
+            try
+            {
+                int hr = NativeMethods.DwmGetWindowAttributeInt(hwnd, NativeMethods.DWMWA_CLOAKED, out int cloaked, sizeof(int));
+                return hr >= 0 && cloaked != 0;
+            }
+            catch
+            {
+                return false; // ponytail: DWM call fails on GDI windows — assume not cloaked
+            }
+        }
+
+        public static RegionInfo CalculateVisibleRegion(IntPtr targetHwnd, IntPtr excludeHwnd = default, bool skipTopmost = false)
         {
             var info = new RegionInfo();
 
@@ -59,9 +75,20 @@ namespace DarkReader
             IntPtr current = NativeMethods.GetWindow(targetHwnd, NativeMethods.GW_HWNDPREV);
             while (current != IntPtr.Zero)
             {
-                // Skip target window itself and the excluded window (e.g., our own overlay)
-                if (NativeMethods.IsWindowVisible(current) && current != targetHwnd && current != excludeHwnd)
+                // Skip: target itself, our overlay, minimized windows, cloaked windows (other desktops)
+                if (NativeMethods.IsWindowVisible(current) && !NativeMethods.IsIconic(current) && !IsDwmCloaked(current) && current != targetHwnd && current != excludeHwnd)
                 {
+                    // Skip always-on-top windows (e.g., fullscreen games) when requested
+                    if (skipTopmost)
+                    {
+                        IntPtr exStyle = NativeMethods.GetWindowLongPtr(current, NativeMethods.GWL_EXSTYLE);
+                        if ((exStyle.ToInt64() & NativeMethods.WS_EX_TOPMOST) != 0)
+                        {
+                            current = NativeMethods.GetWindow(current, NativeMethods.GW_HWNDPREV);
+                            continue;
+                        }
+                    }
+
                     Rectangle coverRect = GetVisibleWindowRect(current);
                     if (!coverRect.IsEmpty)
                     {
@@ -70,6 +97,15 @@ namespace DarkReader
 
                         if (coverW > 0 && coverH > 0)
                         {
+                            // Only subtract if this window actually overlaps the current region bounds
+                            NativeMethods.GetRgnBox(hRgn, out RECT currentBounds);
+                            if (coverRect.Right <= currentBounds.left || coverRect.Bottom <= currentBounds.top ||
+                                coverRect.Left >= currentBounds.right || coverRect.Top >= currentBounds.bottom)
+                            {
+                                current = NativeMethods.GetWindow(current, NativeMethods.GW_HWNDPREV);
+                                continue; // No overlap — skip this window
+                            }
+
                             IntPtr hCoverRgn = NativeMethods.CreateRectRgn(
                                 coverRect.Left, coverRect.Top, coverRect.Right, coverRect.Bottom);
 
