@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>DarkReader.Test</RootNamespace>
+    <AssemblyName>Test01_Magnifier</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\DarkReader\NativeMethods.cs" Link="NativeMethods.cs" />
+    <Compile Include="..\..\DarkReader\BuiltinMatrices.cs" Link="BuiltinMatrices.cs" />
+  </ItemGroup>
+
+</Project>
