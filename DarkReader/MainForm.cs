@@ -301,8 +301,10 @@ namespace DarkReader
 
                 // Calculate visible region (areas not covered by other windows)
                 // Exclude our own overlay window from the covering calculation
+                // Skip always-on-top windows (e.g., fullscreen games) since they're in a
+                // different Z-order band and would incorrectly empty our region
                 IntPtr overlayHwnd = _regionOverlay?.WindowHandle ?? IntPtr.Zero;
-                var region = WindowRegionCalculator.CalculateVisibleRegion(_targetWindow.Value, overlayHwnd);
+                var region = WindowRegionCalculator.CalculateVisibleRegion(_targetWindow.Value, overlayHwnd, skipTopmost: true);
 
                 if (region.IsEmpty)
                 {
