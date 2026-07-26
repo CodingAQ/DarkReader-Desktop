@@ -120,7 +120,12 @@ namespace DarkReader
             // Populate window list when dropdown opens
             selectWindowItem.DropDownOpening += (s, e) => PopulateWindowList(selectWindowItem);
 
+            // Frame rate
+            var fpsItem = new ToolStripMenuItem("Frame Rate", null, OnFrameRateClick);
+
             var exitItem = new ToolStripMenuItem("Exit", null, OnExitClick);
+            contextMenu.Items.Add(fpsItem);
+            contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(exitItem);
 
             contextMenu.Opening += (s, e) =>
@@ -241,14 +246,14 @@ namespace DarkReader
                 {
                     if (!effectActive)
                     {
-                        Monitor.Wait(controlLock, 100);
+                        Monitor.Wait(controlLock, Settings.Current.UpdateIntervalMs);
                         continue;
                     }
                 }
 
                 if (!NativeMethods.MagInitialize())
                 {
-                    Thread.Sleep(100);
+                    Thread.Sleep(Settings.Current.UpdateIntervalMs);
                     continue;
                 }
 
@@ -258,7 +263,7 @@ namespace DarkReader
                     // Wait with timeout so Pulse can wake us immediately
                     lock (controlLock)
                     {
-                        Monitor.Wait(controlLock, 100);
+                        Monitor.Wait(controlLock, Settings.Current.UpdateIntervalMs);
                     }
 
                     if (exiting) break;
@@ -571,6 +576,64 @@ namespace DarkReader
                 item.Checked = Settings.Current.ActiveOnStartup;
         }
 
+        private void SetFrameRate(int intervalMs)
+        {
+            Settings.Current.UpdateIntervalMs = intervalMs;
+            Settings.Save();
+            _windowTracker?.UpdateInterval(intervalMs);
+            lock (controlLock)
+            {
+                Monitor.Pulse(controlLock);
+            }
+        }
+
+        private void OnFrameRateClick(object sender, EventArgs e)
+        {
+            using var form = new Form
+            {
+                Text = "Frame Rate",
+                Size = new Size(240, 120),
+                StartPosition = FormStartPosition.CenterScreen,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+
+            var lbl = new Label
+            {
+                Text = "FPS (5-60):",
+                Location = new Point(15, 18),
+                AutoSize = true
+            };
+
+            var nud = new NumericUpDown
+            {
+                Location = new Point(100, 15),
+                Size = new Size(100, 23),
+                Minimum = 5,
+                Maximum = 60,
+                Value = Math.Clamp(1000 / Settings.Current.UpdateIntervalMs, 5, 60)
+            };
+
+            var btnOk = new Button
+            {
+                Text = "OK",
+                DialogResult = DialogResult.OK,
+                Location = new Point(80, 55),
+                Size = new Size(60, 26)
+            };
+
+            form.Controls.AddRange(new Control[] { lbl, nud, btnOk });
+            form.AcceptButton = btnOk;
+
+            if (form.ShowDialog() == DialogResult.OK)
+            {
+                int fps = (int)nud.Value;
+                int intervalMs = Math.Max(1, 1000 / fps);
+                SetFrameRate(intervalMs);
+            }
+        }
+
         private void StartWindowTracking(IntPtr hwnd)
         {
             // Stop any existing tracking
@@ -588,7 +651,7 @@ namespace DarkReader
                 _targetWindowTitle = $"Window (0x{hwnd.ToInt64():X})";
 
             // Start tracker
-            _windowTracker = new WindowTracker();
+            _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
             _windowTracker.StartTracking(hwnd, OnWindowChanged, OnTargetWindowClosed);
 
             // Save settings
