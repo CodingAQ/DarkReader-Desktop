@@ -33,7 +33,12 @@ namespace DarkReader
         public int ActiveMode { get; set; } = -1;
         public bool ActiveOnStartup { get; set; } = false;
         public bool SmoothTransitions { get; set; } = true;
-        public int UpdateIntervalMs { get; set; } = 100;
+        private int _updateIntervalMs = 100;
+        public int UpdateIntervalMs
+        {
+            get => _updateIntervalMs;
+            set => _updateIntervalMs = Math.Clamp(value, 16, 200); // 5-60 fps
+        }
 
         // Region restriction settings
         public bool UseRegion { get; set; } = false;

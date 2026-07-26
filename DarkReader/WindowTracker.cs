@@ -37,7 +37,7 @@ namespace DarkReader
         private readonly object _lock = new object();
         private Action _onWindowChanged;
         Action _onWindowClosed;
-        private readonly int _intervalMs;
+        private int _intervalMs;
 
         public bool IsTracking => _running;
         public IntPtr TargetHandle => _targetHwnd;
@@ -48,8 +48,12 @@ namespace DarkReader
         }
 
         /// <summary>
-        /// Start tracking a window by its handle.
+        /// Update the polling interval. Takes effect on next poll cycle.
         /// </summary>
+        public void UpdateInterval(int intervalMs)
+        {
+            _intervalMs = intervalMs;
+        }
         public void StartTracking(IntPtr hwnd, Action onWindowChanged, Action onWindowClosed = null)
         {
             if (_running) StopTracking();

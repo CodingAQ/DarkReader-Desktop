@@ -580,6 +580,7 @@ namespace DarkReader
         {
             Settings.Current.UpdateIntervalMs = intervalMs;
             Settings.Save();
+            _windowTracker?.UpdateInterval(intervalMs);
             lock (controlLock)
             {
                 Monitor.Pulse(controlLock);
