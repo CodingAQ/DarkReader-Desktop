@@ -54,6 +54,9 @@ namespace DarkReader
         public List<string> ClosedWindowTitles { get; set; } = new List<string>();
         public bool PauseWhenNotInForeground { get; set; } = true;
 
+        // Legacy single-window setting (for migration)
+        public string TargetWindowTitle { get; set; } = null;
+
         public static void Load()
         {
             try
@@ -62,6 +65,21 @@ namespace DarkReader
                 {
                     var json = File.ReadAllText(SettingsPath);
                     Current = JsonSerializer.Deserialize<Settings>(json) ?? new Settings();
+
+                    // Replace null lists with empty lists
+                    if (Current.TargetWindowTitles == null)
+                        Current.TargetWindowTitles = new List<string>();
+                    if (Current.ClosedWindowTitles == null)
+                        Current.ClosedWindowTitles = new List<string>();
+
+                    // Migrate legacy TargetWindowTitle to TargetWindowTitles
+                    if (!string.IsNullOrEmpty(Current.TargetWindowTitle) &&
+                        !Current.TargetWindowTitles.Contains(Current.TargetWindowTitle))
+                    {
+                        Current.TargetWindowTitles.Add(Current.TargetWindowTitle);
+                        Current.TargetWindowTitle = null; // Clear after migration
+                        Save();
+                    }
                 }
                 else
                 {

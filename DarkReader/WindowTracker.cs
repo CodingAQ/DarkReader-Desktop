@@ -31,15 +31,24 @@ namespace DarkReader
     {
         private readonly Dictionary<IntPtr, TrackedWindow> _trackedWindows = new Dictionary<IntPtr, TrackedWindow>();
         private Thread _pollThread;
-        private bool _running;
-        private bool _disposed;
+        private volatile bool _running;
+        private volatile bool _disposed;
         private readonly object _lock = new object();
         private Action _onWindowChanged;
         private Action<IntPtr> _onWindowClosed;
-        private int _intervalMs;
+        private volatile int _intervalMs;
 
         public bool IsTracking => _running;
-        public int Count => _trackedWindows.Count;
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _trackedWindows.Count;
+                }
+            }
+        }
 
         public WindowTracker(int intervalMs = 100)
         {
@@ -64,9 +73,14 @@ namespace DarkReader
             _onWindowChanged = onWindowChanged;
             _onWindowClosed = onWindowClosed;
 
-            foreach (var hwnd in hwnds)
+            int count;
+            lock (_lock)
             {
-                AddWindowInternal(hwnd);
+                foreach (var hwnd in hwnds)
+                {
+                    AddWindowInternal(hwnd);
+                }
+                count = _trackedWindows.Count;
             }
 
             _running = true;
@@ -79,7 +93,7 @@ namespace DarkReader
             _pollThread.Start();
 
             // Fire callback immediately so overlay appears immediately
-            if (_trackedWindows.Count > 0)
+            if (count > 0)
             {
                 _onWindowChanged?.Invoke();
             }
@@ -128,16 +142,22 @@ namespace DarkReader
                 _pollThread.Join(200);
                 _pollThread = null;
             }
-            _trackedWindows.Clear();
+            lock (_lock)
+            {
+                _trackedWindows.Clear();
+            }
         }
 
         private void PollLoop()
         {
             while (_running && !_disposed)
             {
+                List<IntPtr> closedWindows;
+                bool anyChanged = false;
+
                 lock (_lock)
                 {
-                    var closedWindows = new List<IntPtr>();
+                    closedWindows = new List<IntPtr>();
 
                     foreach (var kvp in _trackedWindows)
                     {
@@ -162,23 +182,32 @@ namespace DarkReader
                         }
                     }
 
-                    // Fire closed callbacks
+                    // Remove closed windows from tracking
                     foreach (var hwnd in closedWindows)
                     {
                         _trackedWindows.Remove(hwnd);
-                        _onWindowClosed?.Invoke(hwnd);
                     }
 
-                    // Fire changed callback if any window changed
+                    // Check if any window changed and clear all flags
                     foreach (var kvp in _trackedWindows)
                     {
                         if (kvp.Value.HasChanged)
                         {
                             kvp.Value.HasChanged = false;
-                            _onWindowChanged?.Invoke();
-                            break;
+                            anyChanged = true;
                         }
                     }
+                }
+
+                // Fire callbacks outside lock
+                foreach (var hwnd in closedWindows)
+                {
+                    _onWindowClosed?.Invoke(hwnd);
+                }
+
+                if (anyChanged)
+                {
+                    _onWindowChanged?.Invoke();
                 }
 
                 Thread.Sleep(_intervalMs);
