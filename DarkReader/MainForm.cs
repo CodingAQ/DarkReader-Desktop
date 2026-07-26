@@ -46,8 +46,8 @@ namespace DarkReader
 
         // Window targeting
         private WindowTracker _windowTracker;
-        private IntPtr? _targetWindow;
-        private string _targetWindowTitle;
+        private Dictionary<IntPtr, string> _targetWindows = new Dictionary<IntPtr, string>();
+        private Dictionary<IntPtr, string> _closedWindowTitles = new Dictionary<IntPtr, string>();
         private bool _useWindow = false;
 
         // Hotkey IDs
@@ -134,7 +134,9 @@ namespace DarkReader
                 selectRegionItem.Checked = _useRegion && !_useWindow;
                 selectRegionItem.Text = (_useRegion && !_useWindow) ? $"Region: {RegionText}" : "Select Region...";
                 selectWindowItem.Checked = _useWindow;
-                selectWindowItem.Text = _useWindow ? $"Window: {_targetWindowTitle}" : "Select Window...";
+                selectWindowItem.Text = _useWindow
+                    ? $"Windows: {(_targetWindows.Count > 0 ? string.Join(", ", _targetWindows.Values.Take(2)) + (_targetWindows.Count > 2 ? $" +{_targetWindows.Count - 2}" : "") : "none")}"
+                    : "Select Window...";
                 clearWindowItem.Enabled = _useWindow;
                 startupItem.Checked = Settings.Current.ActiveOnStartup;
             };
@@ -292,8 +294,8 @@ namespace DarkReader
         {
             if (_useWindow)
             {
-                // Window tracking mode - calculate visible region
-                if (!_targetWindow.HasValue)
+                // Window tracking mode - calculate visible region for all targets
+                if (_targetWindows.Count == 0)
                 {
                     EnsureRegionOverlayDestroyed();
                     if (_lastShowDecision)
@@ -304,12 +306,9 @@ namespace DarkReader
                     return;
                 }
 
-                // Calculate visible region (areas not covered by other windows)
-                // Exclude our own overlay window from the covering calculation
-                // Skip always-on-top windows (e.g., fullscreen games) since they're in a
-                // different Z-order band and would incorrectly empty our region
+                // Calculate union of visible regions for all target windows
                 IntPtr overlayHwnd = _regionOverlay?.WindowHandle ?? IntPtr.Zero;
-                var region = WindowRegionCalculator.CalculateVisibleRegion(_targetWindow.Value, overlayHwnd, skipTopmost: true);
+                RegionInfo region = CalculateMultiWindowRegion(overlayHwnd);
 
                 if (region.IsEmpty)
                 {
@@ -329,9 +328,10 @@ namespace DarkReader
                 else
                 {
                     // Partially or fully visible - show overlay with region shape
+                    // ponytail: clear stale fullscreen effect, double-apply inverts the inversion
+                    BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                     EnsureRegionOverlay(region);
                     _regionOverlay.ApplyColorEffect(currentMatrix);
-                    _regionOverlay.UpdateRegion(region);
                     _currentRegionInfo = region;
                     _lastShowDecision = true;
                 }
@@ -339,6 +339,8 @@ namespace DarkReader
             else if (_useRegion && _region.HasValue)
             {
                 // Manual region mode - use rectangle
+                // ponytail: clear stale fullscreen effect, double-apply inverts the inversion
+                BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                 bool regionChanged = _region.Value != _lastAppliedRegion;
                 var regionInfo = new RegionInfo
                 {
@@ -371,6 +373,59 @@ namespace DarkReader
                 _lastShowDecision = false;
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Calculate the union of visible regions for all target windows.
+        /// </summary>
+        private RegionInfo CalculateMultiWindowRegion(IntPtr overlayHwnd)
+        {
+            IntPtr combinedRgn = IntPtr.Zero;
+            Rectangle totalBounds = Rectangle.Empty;
+            bool anyVisible = false;
+
+            foreach (var hwnd in _targetWindows.Keys)
+            {
+                if (!NativeMethods.IsWindow(hwnd))
+                    continue;
+
+                var region = WindowRegionCalculator.CalculateVisibleRegion(hwnd, overlayHwnd, skipTopmost: true);
+
+                if (region.IsEmpty)
+                {
+                    WindowRegionCalculator.ReleaseRegion(region.HRgn);
+                    continue;
+                }
+
+                if (combinedRgn == IntPtr.Zero)
+                {
+                    // First visible region - create a copy
+                    combinedRgn = NativeMethods.CreateRectRgn(0, 0, 0, 0);
+                    NativeMethods.CombineRgn(combinedRgn, region.HRgn, IntPtr.Zero, NativeMethods.RGN_COPY);
+                    totalBounds = region.Bounds;
+                }
+                else
+                {
+                    // Union with existing region
+                    NativeMethods.CombineRgn(combinedRgn, combinedRgn, region.HRgn, NativeMethods.RGN_OR);
+                    totalBounds = Rectangle.Union(totalBounds, region.Bounds);
+                }
+
+                anyVisible = true;
+                WindowRegionCalculator.ReleaseRegion(region.HRgn);
+            }
+
+            if (!anyVisible)
+            {
+                return new RegionInfo { IsEmpty = true };
+            }
+
+            return new RegionInfo
+            {
+                HRgn = combinedRgn,
+                Bounds = totalBounds,
+                IsEmpty = false
+            };
         }
 
         private void EnsureRegionOverlay(RegionInfo region)
@@ -550,16 +605,108 @@ namespace DarkReader
 
             foreach (var (hwnd, title) in windows)
             {
-                string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
-                var item = new ToolStripMenuItem(displayTitle, null, (s, e) => StartWindowTracking(hwnd));
-                item.ToolTipText = title;
+                bool isTracked = _targetWindows.ContainsKey(hwnd);
+                bool isClosed = _closedWindowTitles.ContainsKey(hwnd);
 
-                // Highlight currently selected window
-                if (_useWindow && _targetWindow == hwnd)
-                    item.Checked = true;
+                string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
+                if (isClosed)
+                    displayTitle += " (Closed)";
+
+                var item = new ToolStripMenuItem(displayTitle);
+                item.ToolTipText = title;
+                item.Checked = isTracked || isClosed;
+                item.CheckOnClick = true;
+
+                // Gray out closed windows
+                if (isClosed)
+                {
+                    item.ForeColor = Color.Gray;
+                }
+
+                item.CheckedChanged += (s, e) => OnWindowItemCheckedChanged(hwnd, title, item);
 
                 selectWindowItem.DropDownItems.Add(item);
             }
+        }
+
+        private void OnWindowItemCheckedChanged(IntPtr hwnd, string title, ToolStripMenuItem item)
+        {
+            bool isClosed = _closedWindowTitles.ContainsKey(hwnd);
+
+            if (item.Checked)
+            {
+                // Window checked
+                if (isClosed)
+                {
+                    // Reopen tracking for a closed window - remove from closed set
+                    _closedWindowTitles.Remove(hwnd);
+                    item.ForeColor = SystemColors.ControlText;
+                }
+
+                // Add to tracking
+                _targetWindows[hwnd] = title;
+
+                // Start tracker if not running
+                if (_windowTracker == null || !_windowTracker.IsTracking)
+                {
+                    StartTracker(_targetWindows.Keys);
+                }
+                else
+                {
+                    _windowTracker.AddWindow(hwnd);
+                }
+            }
+            else
+            {
+                // Window unchecked
+                if (isClosed)
+                {
+                    // Remove from closed set entirely
+                    _closedWindowTitles.Remove(hwnd);
+                    // Remove from dropdown list
+                    if (item.Owner is ToolStripDropDownMenu parent)
+                    {
+                        parent.Items.Remove(item);
+                    }
+                }
+                else
+                {
+                    // Remove from tracking
+                    _targetWindows.Remove(hwnd);
+                    _windowTracker?.RemoveWindow(hwnd);
+
+                    // If no windows remain, stop tracker but keep _useWindow true
+                    if (_targetWindows.Count == 0)
+                    {
+                        _windowTracker?.Dispose();
+                        _windowTracker = null;
+                    }
+                }
+            }
+
+            // Save settings
+            SaveWindowSettings();
+
+            lock (controlLock) { Monitor.Pulse(controlLock); }
+            UpdateTrayTip();
+        }
+
+        private void StartTracker(IEnumerable<IntPtr> hwnds)
+        {
+            _windowTracker?.Dispose();
+            _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
+            _windowTracker.StartTracking(hwnds, OnWindowChanged, OnTargetWindowClosed);
+            _useWindow = true;
+            _useRegion = false;
+        }
+
+        private void SaveWindowSettings()
+        {
+            Settings.Current.UseWindow = _useWindow;
+            Settings.Current.UseRegion = false;
+            Settings.Current.TargetWindowTitles = new List<string>(_targetWindows.Values);
+            Settings.Current.ClosedWindowTitles = new List<string>(_closedWindowTitles.Values);
+            Settings.Save();
         }
 
         private void OnClearWindowClick(object sender, EventArgs e)
@@ -634,30 +781,41 @@ namespace DarkReader
             }
         }
 
-        private void StartWindowTracking(IntPtr hwnd)
+        private void RestoreMultiWindowTracking()
         {
-            // Stop any existing tracking
-            StopWindowTracking();
+            _targetWindows.Clear();
+            _closedWindowTitles.Clear();
 
-            _targetWindow = hwnd;
+            foreach (var title in Settings.Current.TargetWindowTitles)
+            {
+                var hwnd = WindowTracker.FindWindowByTitle(title);
+                if (hwnd != IntPtr.Zero)
+                {
+                    _targetWindows[hwnd] = title;
+                }
+            }
+
+            foreach (var title in Settings.Current.ClosedWindowTitles)
+            {
+                if (Settings.Current.TargetWindowTitles.Contains(title)) continue;
+                var hwnd = WindowTracker.FindWindowByTitle(title);
+                if (hwnd != IntPtr.Zero)
+                {
+                    _closedWindowTitles[hwnd] = title;
+                }
+            }
+
+            if (_targetWindows.Count == 0) return;
+
             _useWindow = true;
             _useRegion = false;
 
-            // Get window title
-            var sb = new StringBuilder(512);
-            NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-            _targetWindowTitle = sb.ToString();
-            if (string.IsNullOrEmpty(_targetWindowTitle))
-                _targetWindowTitle = $"Window (0x{hwnd.ToInt64():X})";
-
-            // Start tracker
+            // Start tracker with all found windows
             _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
-            _windowTracker.StartTracking(hwnd, OnWindowChanged, OnTargetWindowClosed);
+            _windowTracker.StartTracking(_targetWindows.Keys, OnWindowChanged, OnTargetWindowClosed);
 
-            // Save settings
             Settings.Current.UseWindow = true;
             Settings.Current.UseRegion = false;
-            Settings.Current.TargetWindowTitle = _targetWindowTitle;
             Settings.Save();
 
             lock (controlLock) { Monitor.Pulse(controlLock); }
@@ -668,8 +826,8 @@ namespace DarkReader
         {
             _windowTracker?.Dispose();
             _windowTracker = null;
-            _targetWindow = null;
-            _targetWindowTitle = null;
+            _targetWindows.Clear();
+            _closedWindowTitles.Clear();
             _useWindow = false;
         }
 
@@ -683,17 +841,29 @@ namespace DarkReader
             }
         }
 
-        private void OnTargetWindowClosed()
+        private void OnTargetWindowClosed(IntPtr hwnd)
         {
-            // Target window was closed - stop tracking
+            // A target window was closed - gray it out in the list
             this.BeginInvoke(new Action(() =>
             {
-                StopWindowTracking();
-                _region = null;
-                _currentRegionInfo = default;
-                _lastShowDecision = false;
-                Settings.Current.UseWindow = false;
-                Settings.Save();
+                string title = _targetWindows.ContainsKey(hwnd) ? _targetWindows[hwnd] : $"Window (0x{hwnd.ToInt64():X})";
+
+                // Move from active to closed
+                _targetWindows.Remove(hwnd);
+                _closedWindowTitles[hwnd] = title;
+
+                // Save settings
+                SaveWindowSettings();
+
+                // If no active windows remain, keep tracking mode but with empty overlay
+                if (_targetWindows.Count == 0)
+                {
+                    _region = null;
+                    _currentRegionInfo = default;
+                    _lastShowDecision = false;
+                }
+
+                lock (controlLock) { Monitor.Pulse(controlLock); }
                 UpdateTrayTip();
             }));
         }
@@ -704,8 +874,14 @@ namespace DarkReader
             {
                 string mode = effectActive ? $"Mode {currentMode}" : "Off";
                 string target;
-                if (_useWindow)
-                    target = $" [Window: {_targetWindowTitle}]";
+                if (_useWindow && _targetWindows.Count > 0)
+                {
+                    string titles = string.Join(", ", _targetWindows.Values.Take(2));
+                    if (_targetWindows.Count > 2) titles += $" +{_targetWindows.Count - 2}";
+                    target = $" [Windows: {titles}]";
+                }
+                else if (_useWindow)
+                    target = " [Windows: none]";
                 else if (_useRegion)
                     target = $" [{RegionText}]";
                 else
@@ -754,14 +930,10 @@ namespace DarkReader
                 _useRegion = true;
             }
 
-            // Restore window tracking
-            if (Settings.Current.UseWindow && !string.IsNullOrEmpty(Settings.Current.TargetWindowTitle))
+            // Restore window tracking for multiple windows
+            if (Settings.Current.UseWindow && Settings.Current.TargetWindowTitles.Count > 0)
             {
-                var hwnd = WindowTracker.FindWindowByTitle(Settings.Current.TargetWindowTitle);
-                if (hwnd != IntPtr.Zero)
-                {
-                    StartWindowTracking(hwnd);
-                }
+                RestoreMultiWindowTracking();
             }
 
             // Restore saved mode (activates effect)

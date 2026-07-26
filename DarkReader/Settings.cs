@@ -17,6 +17,7 @@
 // along with DarkReader. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -49,7 +50,8 @@ namespace DarkReader
 
         // Window targeting settings
         public bool UseWindow { get; set; } = false;
-        public string TargetWindowTitle { get; set; } = "";
+        public List<string> TargetWindowTitles { get; set; } = new List<string>();
+        public List<string> ClosedWindowTitles { get; set; } = new List<string>();
         public bool PauseWhenNotInForeground { get; set; } = true;
 
         public static void Load()
