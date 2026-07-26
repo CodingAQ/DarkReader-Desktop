@@ -55,6 +55,7 @@ DarkReader-Desktop is a Windows system tray application that switches the entire
 - **Clear Window Target** — Clear the window target
 - **Pause When Not Foreground** — Auto-pause when window loses focus (recommended)
 - **Active On Startup** — Enable on launch
+- **Frame Rate** — Custom frame rate (5-60 fps)
 - **Exit** — Quit the application
 
 ### Global Hotkeys
@@ -74,10 +75,11 @@ DarkReader can apply the inversion effect only to a specific window:
 
 | Action | Effect |
 |--------|--------|
-| Menu → **Select Window** → pick a window | Choose a target window from the list |
+| Menu → **Select Window** → pick a window(s) | Choose one or more target windows from the list |
 | Menu → **Clear Window Target** | Clear the window target, restore fullscreen |
 
 > When the window is obscured by other windows, the filter only covers the visible parts.
+> Supports multiple selection, can track multiple windows simultaneously.
 
 ### Region Inversion
 
