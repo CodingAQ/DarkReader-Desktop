@@ -56,6 +56,7 @@ DarkReader-Desktop 是一个 Windows 系统托盘应用，将整个屏幕或指�
 - **Select Window** — 选择目标窗口（智能覆盖）
 - **Clear Window Target** — 清除窗口目标
 - **Active On Startup** — 启动时启用
+- **Frame Rate** — 自定义帧率（5-60 fps）
 - **Exit** — 退出程序
 
 ### 全局快捷键
@@ -71,14 +72,15 @@ DarkReader-Desktop 是一个 Windows 系统托盘应用，将整个屏幕或指�
 
 ### 窗口翻转
 
-DarkReader 支持将翻转效果只应用到指定窗口：
+DarkReader 支持将翻转效果应用到指定目标窗口：
 
 | 操作 | 效果 |
 |------|------|
-| 菜单 → **Select Window** → 选择窗口 | 从列表中选择目标窗口 |
+| 菜单 → **Select Window** → 选择窗口 | 从列表中选择一个或多个目标窗口 |
 | 菜单 → **Clear Window Target** | 清除窗口目标，恢复全屏区域 |
 
 > 窗口被其他窗口遮挡时，滤镜只覆盖可见部分
+> 支持多选，可同时追踪多个窗口
 
 ### 区域翻转
 
