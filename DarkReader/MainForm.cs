@@ -642,16 +642,26 @@ namespace DarkReader
             foreach (var (hwnd, title) in windows)
             {
                 bool isTracked;
+                bool isReopenedClosed;
                 lock (controlLock)
                 {
                     isTracked = _targetWindows.ContainsKey(hwnd);
+                    // ponytail: match by title for reopened windows (hwnd changes on recreation)
+                    isReopenedClosed = !isTracked && _targetWindows.Values.Contains(title);
+                    if (isReopenedClosed)
+                    {
+                        // Rebind new hwnd to existing tracked title
+                        _targetWindows[hwnd] = title;
+                        _closedWindowTitles.Remove(title);
+                        _windowTracker?.AddWindow(hwnd);
+                    }
                 }
 
                 string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
 
                 var item = new ToolStripMenuItem(displayTitle);
                 item.ToolTipText = title;
-                item.Checked = isTracked;
+                item.Checked = isTracked || isReopenedClosed;
                 item.CheckOnClick = true;
 
                 item.CheckedChanged += (s, e) => OnWindowItemCheckedChanged(hwnd, title, item);
