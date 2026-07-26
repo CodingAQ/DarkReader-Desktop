@@ -25,7 +25,7 @@ namespace DarkReader
 {
     /// <summary>
     /// Tracks a target window's position and size, invoking a callback when it changes.
-    /// Polls at 10fps for smooth following.
+    /// Polls at configurable interval for smooth following.
     /// </summary>
     public class WindowTracker : IDisposable
     {
@@ -37,9 +37,15 @@ namespace DarkReader
         private readonly object _lock = new object();
         private Action _onWindowChanged;
         Action _onWindowClosed;
+        private readonly int _intervalMs;
 
         public bool IsTracking => _running;
         public IntPtr TargetHandle => _targetHwnd;
+
+        public WindowTracker(int intervalMs = 100)
+        {
+            _intervalMs = intervalMs;
+        }
 
         /// <summary>
         /// Start tracking a window by its handle.
@@ -124,7 +130,7 @@ namespace DarkReader
                     }
                 }
 
-                Thread.Sleep(100); // 10fps polling - enough for window tracking
+                Thread.Sleep(_intervalMs);
             }
         }
 

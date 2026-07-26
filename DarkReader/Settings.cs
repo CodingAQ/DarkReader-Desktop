@@ -33,6 +33,7 @@ namespace DarkReader
         public int ActiveMode { get; set; } = -1;
         public bool ActiveOnStartup { get; set; } = false;
         public bool SmoothTransitions { get; set; } = true;
+        public int UpdateIntervalMs { get; set; } = 100;
 
         // Region restriction settings
         public bool UseRegion { get; set; } = false;
