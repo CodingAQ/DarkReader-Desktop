@@ -24,23 +24,31 @@ using System.Threading;
 namespace DarkReader
 {
     /// <summary>
-    /// Tracks a target window's position and size, invoking a callback when it changes.
+    /// Tracks multiple target windows' positions and sizes, invoking callbacks when they change.
     /// Polls at configurable interval for smooth following.
     /// </summary>
     public class WindowTracker : IDisposable
     {
-        private IntPtr _targetHwnd;
+        private readonly Dictionary<IntPtr, TrackedWindow> _trackedWindows = new Dictionary<IntPtr, TrackedWindow>();
         private Thread _pollThread;
-        private bool _running;
-        private bool _disposed;
-        private Rectangle _lastRect;
+        private volatile bool _running;
+        private volatile bool _disposed;
         private readonly object _lock = new object();
         private Action _onWindowChanged;
-        Action _onWindowClosed;
-        private int _intervalMs;
+        private Action<IntPtr> _onWindowClosed;
+        private volatile int _intervalMs;
 
         public bool IsTracking => _running;
-        public IntPtr TargetHandle => _targetHwnd;
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _trackedWindows.Count;
+                }
+            }
+        }
 
         public WindowTracker(int intervalMs = 100)
         {
@@ -54,22 +62,28 @@ namespace DarkReader
         {
             _intervalMs = intervalMs;
         }
-        public void StartTracking(IntPtr hwnd, Action onWindowChanged, Action onWindowClosed = null)
+
+        /// <summary>
+        /// Start tracking multiple windows by their handles.
+        /// </summary>
+        public void StartTracking(IEnumerable<IntPtr> hwnds, Action onWindowChanged, Action<IntPtr> onWindowClosed = null)
         {
             if (_running) StopTracking();
 
-            _targetHwnd = hwnd;
             _onWindowChanged = onWindowChanged;
             _onWindowClosed = onWindowClosed;
-            _running = true;
 
-            // Get initial rect
-            if (NativeMethods.GetWindowRect(hwnd, out RECT rect))
+            int count;
+            lock (_lock)
             {
-                _lastRect = new Rectangle(rect.left, rect.top,
-                    rect.right - rect.left, rect.bottom - rect.top);
+                foreach (var hwnd in hwnds)
+                {
+                    AddWindowInternal(hwnd);
+                }
+                count = _trackedWindows.Count;
             }
 
+            _running = true;
             _pollThread = new Thread(PollLoop)
             {
                 IsBackground = true,
@@ -79,21 +93,45 @@ namespace DarkReader
             _pollThread.Start();
 
             // Fire callback immediately so overlay appears immediately
-            if (_lastRect.Width > 0 && _lastRect.Height > 0)
+            if (count > 0)
             {
                 _onWindowChanged?.Invoke();
             }
         }
 
         /// <summary>
-        /// Start tracking using a window title match (partial match).
+        /// Add a window to tracking. Must be called when tracker is already running.
         /// </summary>
-        public bool StartTrackingByTitle(string titleSubstring, Action onWindowChanged, Action onWindowClosed = null)
+        public void AddWindow(IntPtr hwnd)
         {
-            var hwnd = FindWindowByTitle(titleSubstring);
-            if (hwnd == IntPtr.Zero) return false;
-            StartTracking(hwnd, onWindowChanged, onWindowClosed);
-            return true;
+            lock (_lock)
+            {
+                AddWindowInternal(hwnd);
+            }
+        }
+
+        /// <summary>
+        /// Remove a window from tracking.
+        /// </summary>
+        public void RemoveWindow(IntPtr hwnd)
+        {
+            lock (_lock)
+            {
+                _trackedWindows.Remove(hwnd);
+            }
+        }
+
+        private void AddWindowInternal(IntPtr hwnd)
+        {
+            if (_trackedWindows.ContainsKey(hwnd)) return;
+
+            var tw = new TrackedWindow { Hwnd = hwnd };
+            if (NativeMethods.GetWindowRect(hwnd, out RECT rect))
+            {
+                tw.LastRect = new Rectangle(rect.left, rect.top,
+                    rect.right - rect.left, rect.bottom - rect.top);
+            }
+            _trackedWindows[hwnd] = tw;
         }
 
         public void StopTracking()
@@ -104,38 +142,83 @@ namespace DarkReader
                 _pollThread.Join(200);
                 _pollThread = null;
             }
-            _targetHwnd = IntPtr.Zero;
+            lock (_lock)
+            {
+                _trackedWindows.Clear();
+            }
         }
 
         private void PollLoop()
         {
             while (_running && !_disposed)
             {
-                if (!NativeMethods.IsWindow(_targetHwnd))
-                {
-                    // Window was closed
-                    _running = false;
-                    _onWindowClosed?.Invoke();
-                    break;
-                }
+                List<IntPtr> closedWindows;
+                bool anyChanged = false;
 
-                if (NativeMethods.GetWindowRect(_targetHwnd, out RECT rect))
+                lock (_lock)
                 {
-                    var newRect = new Rectangle(rect.left, rect.top,
-                        rect.right - rect.left, rect.bottom - rect.top);
+                    closedWindows = new List<IntPtr>();
 
-                    lock (_lock)
+                    foreach (var kvp in _trackedWindows)
                     {
-                        if (newRect != _lastRect)
+                        var tw = kvp.Value;
+
+                        if (!NativeMethods.IsWindow(tw.Hwnd))
                         {
-                            _lastRect = newRect;
-                            _onWindowChanged?.Invoke();
+                            closedWindows.Add(tw.Hwnd);
+                            continue;
+                        }
+
+                        if (NativeMethods.GetWindowRect(tw.Hwnd, out RECT rect))
+                        {
+                            var newRect = new Rectangle(rect.left, rect.top,
+                                rect.right - rect.left, rect.bottom - rect.top);
+
+                            if (newRect != tw.LastRect)
+                            {
+                                tw.LastRect = newRect;
+                                tw.HasChanged = true;
+                            }
+                        }
+                    }
+
+                    // Remove closed windows from tracking
+                    foreach (var hwnd in closedWindows)
+                    {
+                        _trackedWindows.Remove(hwnd);
+                    }
+
+                    // Check if any window changed and clear all flags
+                    foreach (var kvp in _trackedWindows)
+                    {
+                        if (kvp.Value.HasChanged)
+                        {
+                            kvp.Value.HasChanged = false;
+                            anyChanged = true;
                         }
                     }
                 }
 
+                // Fire callbacks outside lock
+                foreach (var hwnd in closedWindows)
+                {
+                    _onWindowClosed?.Invoke(hwnd);
+                }
+
+                if (anyChanged)
+                {
+                    _onWindowChanged?.Invoke();
+                }
+
                 Thread.Sleep(_intervalMs);
             }
+        }
+
+        private class TrackedWindow
+        {
+            public IntPtr Hwnd;
+            public Rectangle LastRect;
+            public bool HasChanged;
         }
 
         /// <summary>

@@ -17,6 +17,7 @@
 // along with DarkReader. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
@@ -46,9 +47,11 @@ namespace DarkReader
 
         // Window targeting
         private WindowTracker _windowTracker;
-        private IntPtr? _targetWindow;
-        private string _targetWindowTitle;
+        private Dictionary<IntPtr, string> _targetWindows = new Dictionary<IntPtr, string>();
+        private HashSet<string> _closedWindowTitles = new HashSet<string>();
         private bool _useWindow = false;
+        private System.Threading.Timer _closedWindowRescanTimer;
+        private const int ClosedWindowRescanIntervalMs = 1000;
 
         // Hotkey IDs
         private const int HOTKEY_TOGGLE = 1;
@@ -74,6 +77,12 @@ namespace DarkReader
             RegisterHotKeys();
             StartControlLoop();
             InstallForegroundHook();
+
+            // Periodically check whether a previously closed target window has
+            // reopened, so dark mode re-applies automatically without requiring
+            // the user to open the "Select Window" menu.
+            _closedWindowRescanTimer = new System.Threading.Timer(
+                RescanClosedWindows, null, ClosedWindowRescanIntervalMs, ClosedWindowRescanIntervalMs);
         }
 
         private void InitializeTrayIcon()
@@ -133,9 +142,22 @@ namespace DarkReader
                 UpdateMenuCheckmarks(toggleItem, mode1Item, mode2Item, mode3Item, mode4Item, mode5Item, mode6Item, mode7Item);
                 selectRegionItem.Checked = _useRegion && !_useWindow;
                 selectRegionItem.Text = (_useRegion && !_useWindow) ? $"Region: {RegionText}" : "Select Region...";
-                selectWindowItem.Checked = _useWindow;
-                selectWindowItem.Text = _useWindow ? $"Window: {_targetWindowTitle}" : "Select Window...";
-                clearWindowItem.Enabled = _useWindow;
+
+                string windowText;
+                bool windowChecked;
+                bool windowEnabled;
+                lock (controlLock)
+                {
+                    windowChecked = _useWindow;
+                    windowEnabled = _useWindow;
+                    windowText = _useWindow
+                        ? $"Windows: {(_targetWindows.Count > 0 ? string.Join(", ", _targetWindows.Values.Take(2)) + (_targetWindows.Count > 2 ? $" +{_targetWindows.Count - 2}" : "") : "none")}"
+                        : "Select Window...";
+                }
+
+                selectWindowItem.Checked = windowChecked;
+                selectWindowItem.Text = windowText;
+                clearWindowItem.Enabled = windowEnabled;
                 startupItem.Checked = Settings.Current.ActiveOnStartup;
             };
 
@@ -292,8 +314,14 @@ namespace DarkReader
         {
             if (_useWindow)
             {
-                // Window tracking mode - calculate visible region
-                if (!_targetWindow.HasValue)
+                // Window tracking mode - calculate visible region for all targets
+                int windowCount;
+                lock (controlLock)
+                {
+                    windowCount = _targetWindows.Count;
+                }
+
+                if (windowCount == 0)
                 {
                     EnsureRegionOverlayDestroyed();
                     if (_lastShowDecision)
@@ -304,12 +332,9 @@ namespace DarkReader
                     return;
                 }
 
-                // Calculate visible region (areas not covered by other windows)
-                // Exclude our own overlay window from the covering calculation
-                // Skip always-on-top windows (e.g., fullscreen games) since they're in a
-                // different Z-order band and would incorrectly empty our region
+                // Calculate union of visible regions for all target windows
                 IntPtr overlayHwnd = _regionOverlay?.WindowHandle ?? IntPtr.Zero;
-                var region = WindowRegionCalculator.CalculateVisibleRegion(_targetWindow.Value, overlayHwnd, skipTopmost: true);
+                RegionInfo region = CalculateMultiWindowRegion(overlayHwnd);
 
                 if (region.IsEmpty)
                 {
@@ -329,9 +354,10 @@ namespace DarkReader
                 else
                 {
                     // Partially or fully visible - show overlay with region shape
+                    // ponytail: clear stale fullscreen effect, double-apply inverts the inversion
+                    BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                     EnsureRegionOverlay(region);
                     _regionOverlay.ApplyColorEffect(currentMatrix);
-                    _regionOverlay.UpdateRegion(region);
                     _currentRegionInfo = region;
                     _lastShowDecision = true;
                 }
@@ -339,6 +365,8 @@ namespace DarkReader
             else if (_useRegion && _region.HasValue)
             {
                 // Manual region mode - use rectangle
+                // ponytail: clear stale fullscreen effect, double-apply inverts the inversion
+                BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                 bool regionChanged = _region.Value != _lastAppliedRegion;
                 var regionInfo = new RegionInfo
                 {
@@ -371,6 +399,65 @@ namespace DarkReader
                 _lastShowDecision = false;
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Calculate the union of visible regions for all target windows.
+        /// </summary>
+        private RegionInfo CalculateMultiWindowRegion(IntPtr overlayHwnd)
+        {
+            IntPtr combinedRgn = IntPtr.Zero;
+            Rectangle totalBounds = Rectangle.Empty;
+            bool anyVisible = false;
+
+            IntPtr[] hwnds;
+            lock (controlLock)
+            {
+                hwnds = _targetWindows.Keys.ToArray();
+            }
+
+            foreach (var hwnd in hwnds)
+            {
+                if (!NativeMethods.IsWindow(hwnd))
+                    continue;
+
+                var region = WindowRegionCalculator.CalculateVisibleRegion(hwnd, overlayHwnd, skipTopmost: true);
+
+                if (region.IsEmpty)
+                {
+                    WindowRegionCalculator.ReleaseRegion(region.HRgn);
+                    continue;
+                }
+
+                if (combinedRgn == IntPtr.Zero)
+                {
+                    // First visible region - create a copy
+                    combinedRgn = NativeMethods.CreateRectRgn(0, 0, 0, 0);
+                    NativeMethods.CombineRgn(combinedRgn, region.HRgn, IntPtr.Zero, NativeMethods.RGN_COPY);
+                    totalBounds = region.Bounds;
+                }
+                else
+                {
+                    // Union with existing region
+                    NativeMethods.CombineRgn(combinedRgn, combinedRgn, region.HRgn, NativeMethods.RGN_OR);
+                    totalBounds = Rectangle.Union(totalBounds, region.Bounds);
+                }
+
+                anyVisible = true;
+                WindowRegionCalculator.ReleaseRegion(region.HRgn);
+            }
+
+            if (!anyVisible)
+            {
+                return new RegionInfo { IsEmpty = true };
+            }
+
+            return new RegionInfo
+            {
+                HRgn = combinedRgn,
+                Bounds = totalBounds,
+                IsEmpty = false
+            };
         }
 
         private void EnsureRegionOverlay(RegionInfo region)
@@ -510,56 +597,242 @@ namespace DarkReader
 
         private void PopulateWindowList(ToolStripMenuItem selectWindowItem)
         {
-            selectWindowItem.DropDownItems.Clear();
-
-            var windows = new List<(IntPtr hwnd, string title)>();
-
-            NativeMethods.EnumWindows((hWnd, lParam) =>
+            try
             {
-                if (!NativeMethods.IsWindowVisible(hWnd))
+                selectWindowItem.DropDownItems.Clear();
+
+                // Self-heal: move any target window whose handle is no longer valid into
+                // the closed list before deciding what counts as "reopened" below. This
+                // avoids depending on the timing of the tracker's async close
+                // notification (which is delivered via BeginInvoke and could otherwise
+                // race with the menu being opened right around the time a window closes).
+                lock (controlLock)
+                {
+                    foreach (var deadHwnd in _targetWindows.Keys.Where(h => !NativeMethods.IsWindow(h)).ToList())
+                    {
+                        string deadTitle = _targetWindows[deadHwnd];
+                        _targetWindows.Remove(deadHwnd);
+                        _closedWindowTitles.Add(deadTitle);
+                    }
+                }
+
+                var windows = new List<(IntPtr hwnd, string title)>();
+
+                NativeMethods.EnumWindows((hWnd, lParam) =>
+                {
+                    if (!NativeMethods.IsWindowVisible(hWnd))
+                        return true;
+
+                    var sb = new StringBuilder(512);
+                    NativeMethods.GetWindowText(hWnd, sb, sb.Capacity);
+                    string title = sb.ToString();
+
+                    if (string.IsNullOrWhiteSpace(title))
+                        return true;
+
+                    // Skip our own window
+                    if (hWnd == this.Handle)
+                        return true;
+
+                    // Skip tiny/zero-size windows
+                    if (!NativeMethods.GetWindowRect(hWnd, out RECT rect))
+                        return true;
+                    int w = rect.right - rect.left;
+                    int h = rect.bottom - rect.top;
+                    if (w < 10 || h < 10)
+                        return true;
+
+                    windows.Add((hWnd, title));
                     return true;
+                }, IntPtr.Zero);
 
-                var sb = new StringBuilder(512);
-                NativeMethods.GetWindowText(hWnd, sb, sb.Capacity);
-                string title = sb.ToString();
+                // Build set of live window titles for closed-window detection
+                var liveWindowTitles = new HashSet<string>(windows.Select(w => w.title));
 
-                if (string.IsNullOrWhiteSpace(title))
-                    return true;
+                // Get tracked closed titles that are not in the live window list
+                List<string> closedTitles;
+                lock (controlLock)
+                {
+                    closedTitles = _closedWindowTitles
+                        .Where(title => !liveWindowTitles.Contains(title))
+                        .ToList();
+                }
 
-                // Skip our own window
-                if (hWnd == this.Handle)
-                    return true;
+                if (windows.Count == 0 && closedTitles.Count == 0)
+                {
+                    selectWindowItem.DropDownItems.Add("(no windows found)").Enabled = false;
+                    return;
+                }
 
-                // Skip tiny/zero-size windows
-                if (!NativeMethods.GetWindowRect(hWnd, out RECT rect))
-                    return true;
-                int w = rect.right - rect.left;
-                int h = rect.bottom - rect.top;
-                if (w < 10 || h < 10)
-                    return true;
+                // Add live windows
+                bool anyReconnected = false;
+                foreach (var (hwnd, title) in windows)
+                {
+                    bool isTracked;
+                    lock (controlLock)
+                    {
+                        isTracked = _targetWindows.ContainsKey(hwnd);
+                    }
 
-                windows.Add((hWnd, title));
-                return true;
-            }, IntPtr.Zero);
+                    // ponytail: match by title for reopened windows (hwnd changes on recreation)
+                    bool reconnected = !isTracked && TryReconnectClosedWindow(hwnd, title);
+                    if (reconnected)
+                        anyReconnected = true;
 
-            if (windows.Count == 0)
-            {
-                selectWindowItem.DropDownItems.Add("(no windows found)").Enabled = false;
-                return;
-            }
+                    string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
 
-            foreach (var (hwnd, title) in windows)
-            {
-                string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
-                var item = new ToolStripMenuItem(displayTitle, null, (s, e) => StartWindowTracking(hwnd));
-                item.ToolTipText = title;
+                    var item = new ToolStripMenuItem(displayTitle);
+                    item.ToolTipText = title;
+                    item.Checked = isTracked || reconnected;
+                    item.CheckOnClick = true;
 
-                // Highlight currently selected window
-                if (_useWindow && _targetWindow == hwnd)
+                    item.CheckedChanged += (s, e) => OnWindowItemCheckedChanged(hwnd, title, item);
+
+                    selectWindowItem.DropDownItems.Add(item);
+                }
+
+                if (anyReconnected)
+                {
+                    SaveWindowSettings();
+                    lock (controlLock) { Monitor.Pulse(controlLock); }
+                    UpdateTrayTip();
+                }
+
+                // Add closed windows as synthetic entries
+                foreach (var title in closedTitles)
+                {
+                    string displayTitle = title.Length > 60 ? title.Substring(0, 57) + "..." : title;
+                    displayTitle += " (Closed)";
+
+                    var item = new ToolStripMenuItem(displayTitle);
+                    item.ToolTipText = title;
                     item.Checked = true;
+                    item.CheckOnClick = true;
+                    item.ForeColor = Color.Gray;
 
-                selectWindowItem.DropDownItems.Add(item);
+                    // For closed windows, route through removal flow
+                    item.CheckedChanged += (s, e) =>
+                    {
+                        try
+                        {
+                            if (!item.Checked)
+                            {
+                                // Unchecking a closed window - remove it from closed titles
+                                lock (controlLock)
+                                {
+                                    _closedWindowTitles.Remove(title);
+                                }
+
+                                SaveWindowSettings();
+
+                                // Remove from dropdown
+                                if (item.Owner is ToolStripDropDownMenu parent)
+                                {
+                                    parent.Items.Remove(item);
+                                }
+
+                                UpdateTrayTip();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"DarkReader: failed to remove closed window entry: {ex}");
+                        }
+                    };
+
+                    selectWindowItem.DropDownItems.Add(item);
+                }
             }
+            catch (Exception ex)
+            {
+                // Never let a failure here take down the whole application - worst
+                // case the window list is temporarily empty/stale.
+                Debug.WriteLine($"DarkReader: failed to populate window list: {ex}");
+            }
+        }
+
+        private void OnWindowItemCheckedChanged(IntPtr hwnd, string title, ToolStripMenuItem item)
+        {
+            try
+            {
+                if (item.Checked)
+                {
+                    // Window checked - check if this title was in closed list and remove it
+                    lock (controlLock)
+                    {
+                        // Remove from closed titles if present (rebinding to new HWND)
+                        _closedWindowTitles.Remove(title);
+
+                        // Add to tracking
+                        _targetWindows[hwnd] = title;
+                    }
+
+                    IEnumerable<IntPtr> hwndsToTrack;
+                    lock (controlLock)
+                    {
+                        hwndsToTrack = _targetWindows.Keys.ToArray();
+                    }
+
+                    // Start tracker if not running
+                    if (_windowTracker == null || !_windowTracker.IsTracking)
+                    {
+                        StartTracker(hwndsToTrack);
+                    }
+                    else
+                    {
+                        _windowTracker.AddWindow(hwnd);
+                    }
+                }
+                else
+                {
+                    // Window unchecked - remove from tracking
+                    int remainingCount;
+                    lock (controlLock)
+                    {
+                        _targetWindows.Remove(hwnd);
+                        remainingCount = _targetWindows.Count;
+                    }
+                    _windowTracker?.RemoveWindow(hwnd);
+
+                    // If no windows remain, stop tracker but keep _useWindow true
+                    if (remainingCount == 0)
+                    {
+                        _windowTracker?.Dispose();
+                        _windowTracker = null;
+                    }
+                }
+
+                // Save settings
+                SaveWindowSettings();
+
+                lock (controlLock) { Monitor.Pulse(controlLock); }
+                UpdateTrayTip();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"DarkReader: failed to handle window selection change: {ex}");
+            }
+        }
+
+        private void StartTracker(IEnumerable<IntPtr> hwnds)
+        {
+            _windowTracker?.Dispose();
+            _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
+            _windowTracker.StartTracking(hwnds, OnWindowChanged, OnTargetWindowClosed);
+            _useWindow = true;
+            _useRegion = false;
+        }
+
+        private void SaveWindowSettings()
+        {
+            lock (controlLock)
+            {
+                Settings.Current.UseWindow = _useWindow;
+                Settings.Current.UseRegion = false;
+                Settings.Current.TargetWindowTitles = new List<string>(_targetWindows.Values);
+                Settings.Current.ClosedWindowTitles = new List<string>(_closedWindowTitles);
+            }
+            Settings.Save();
         }
 
         private void OnClearWindowClick(object sender, EventArgs e)
@@ -634,30 +907,63 @@ namespace DarkReader
             }
         }
 
-        private void StartWindowTracking(IntPtr hwnd)
+        private void RestoreMultiWindowTracking()
         {
-            // Stop any existing tracking
-            StopWindowTracking();
+            lock (controlLock)
+            {
+                _targetWindows.Clear();
+                _closedWindowTitles.Clear();
 
-            _targetWindow = hwnd;
-            _useWindow = true;
-            _useRegion = false;
+                foreach (var title in Settings.Current.TargetWindowTitles)
+                {
+                    var hwnd = WindowTracker.FindWindowByTitle(title);
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        // Found a live window with this title
+                        _targetWindows[hwnd] = title;
+                    }
+                    else
+                    {
+                        // Window not currently open - preserve in closed titles
+                        _closedWindowTitles.Add(title);
+                    }
+                }
 
-            // Get window title
-            var sb = new StringBuilder(512);
-            NativeMethods.GetWindowText(hwnd, sb, sb.Capacity);
-            _targetWindowTitle = sb.ToString();
-            if (string.IsNullOrEmpty(_targetWindowTitle))
-                _targetWindowTitle = $"Window (0x{hwnd.ToInt64():X})";
+                foreach (var title in Settings.Current.ClosedWindowTitles)
+                {
+                    // Don't duplicate titles already in TargetWindowTitles
+                    if (Settings.Current.TargetWindowTitles.Contains(title))
+                        continue;
 
-            // Start tracker
-            _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
-            _windowTracker.StartTracking(hwnd, OnWindowChanged, OnTargetWindowClosed);
+                    var hwnd = WindowTracker.FindWindowByTitle(title);
+                    if (hwnd == IntPtr.Zero)
+                    {
+                        // Still closed - preserve it
+                        _closedWindowTitles.Add(title);
+                    }
+                    // If found live, it wasn't in TargetWindowTitles, so don't track it
+                }
 
-            // Save settings
+                // Enable window tracking mode even if no windows are currently found
+                _useWindow = true;
+                _useRegion = false;
+            }
+
+            IEnumerable<IntPtr> hwndsToTrack;
+            lock (controlLock)
+            {
+                hwndsToTrack = _targetWindows.Keys.ToArray();
+            }
+
+            // Start tracker if we have any live windows
+            if (hwndsToTrack.Any())
+            {
+                _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
+                _windowTracker.StartTracking(hwndsToTrack, OnWindowChanged, OnTargetWindowClosed);
+            }
+
             Settings.Current.UseWindow = true;
             Settings.Current.UseRegion = false;
-            Settings.Current.TargetWindowTitle = _targetWindowTitle;
             Settings.Save();
 
             lock (controlLock) { Monitor.Pulse(controlLock); }
@@ -668,9 +974,12 @@ namespace DarkReader
         {
             _windowTracker?.Dispose();
             _windowTracker = null;
-            _targetWindow = null;
-            _targetWindowTitle = null;
-            _useWindow = false;
+            lock (controlLock)
+            {
+                _targetWindows.Clear();
+                _closedWindowTitles.Clear();
+                _useWindow = false;
+            }
         }
 
         private void OnWindowChanged()
@@ -683,19 +992,158 @@ namespace DarkReader
             }
         }
 
-        private void OnTargetWindowClosed()
+        private void OnTargetWindowClosed(IntPtr hwnd)
         {
-            // Target window was closed - stop tracking
-            this.BeginInvoke(new Action(() =>
+            // A target window was closed - gray it out in the list
+            // Check if handle is created and form is not disposing
+            if (!IsHandleCreated || IsDisposed || Disposing)
+                return;
+
+            try
             {
-                StopWindowTracking();
-                _region = null;
-                _currentRegionInfo = default;
-                _lastShowDecision = false;
-                Settings.Current.UseWindow = false;
-                Settings.Save();
-                UpdateTrayTip();
-            }));
+                this.BeginInvoke(new Action(() =>
+                {
+                    string title;
+                    int remainingCount;
+
+                    lock (controlLock)
+                    {
+                        title = _targetWindows.ContainsKey(hwnd) ? _targetWindows[hwnd] : $"Window (0x{hwnd.ToInt64():X})";
+
+                        // Move from active to closed
+                        _targetWindows.Remove(hwnd);
+                        _closedWindowTitles.Add(title);
+                        remainingCount = _targetWindows.Count;
+                    }
+
+                    // Save settings
+                    SaveWindowSettings();
+
+                    // If no active windows remain, keep tracking mode but with empty overlay
+                    if (remainingCount == 0)
+                    {
+                        _region = null;
+                        _currentRegionInfo = default;
+                        _lastShowDecision = false;
+                    }
+
+                    lock (controlLock) { Monitor.Pulse(controlLock); }
+                    UpdateTrayTip();
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                // Handle destroyed between check and invocation - ignore
+            }
+        }
+
+        /// <summary>
+        /// Attempts to bind a live window handle to a previously tracked title that is
+        /// currently recorded as closed. Must be called on the UI thread.
+        /// Returns true if the window was reconnected and tracking was (re)started for it.
+        /// </summary>
+        private bool TryReconnectClosedWindow(IntPtr hwnd, string title)
+        {
+            lock (controlLock)
+            {
+                // Already tracked under this handle, or no longer recorded as closed
+                // (e.g. a concurrent rescan already reconnected it) - nothing to do.
+                if (_targetWindows.ContainsKey(hwnd)) return false;
+                if (!_closedWindowTitles.Remove(title)) return false;
+
+                _targetWindows[hwnd] = title;
+            }
+
+            if (_windowTracker == null || !_windowTracker.IsTracking)
+            {
+                IEnumerable<IntPtr> hwndsToTrack;
+                lock (controlLock) { hwndsToTrack = _targetWindows.Keys.ToArray(); }
+                StartTracker(hwndsToTrack);
+            }
+            else
+            {
+                _windowTracker.AddWindow(hwnd);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Periodically checks whether any closed target window has reopened (matched by
+        /// title) and automatically resumes tracking it, so dark mode re-applies without
+        /// requiring the user to open the "Select Window" menu.
+        /// </summary>
+        private void RescanClosedWindows(object state)
+        {
+            try
+            {
+                if (!IsHandleCreated || IsDisposed || Disposing)
+                    return;
+
+                List<string> closedSnapshot;
+                lock (controlLock)
+                {
+                    if (!_useWindow || _closedWindowTitles.Count == 0)
+                        return;
+                    closedSnapshot = new List<string>(_closedWindowTitles);
+                }
+
+                var matches = new List<(IntPtr hwnd, string title)>();
+                NativeMethods.EnumWindows((hWnd, lParam) =>
+                {
+                    if (!NativeMethods.IsWindowVisible(hWnd))
+                        return true;
+
+                    // Skip our own window
+                    if (hWnd == this.Handle)
+                        return true;
+
+                    var sb = new StringBuilder(512);
+                    NativeMethods.GetWindowText(hWnd, sb, sb.Capacity);
+                    string title = sb.ToString();
+
+                    if (!string.IsNullOrWhiteSpace(title) && closedSnapshot.Contains(title))
+                        matches.Add((hWnd, title));
+
+                    return true;
+                }, IntPtr.Zero);
+
+                if (matches.Count == 0)
+                    return;
+
+                this.BeginInvoke(new Action(() =>
+                {
+                    try
+                    {
+                        bool anyReconnected = false;
+                        foreach (var (hwnd, title) in matches)
+                        {
+                            if (TryReconnectClosedWindow(hwnd, title))
+                                anyReconnected = true;
+                        }
+
+                        if (!anyReconnected)
+                            return;
+
+                        SaveWindowSettings();
+                        lock (controlLock) { Monitor.Pulse(controlLock); }
+                        UpdateTrayTip();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Form may have been disposed/closed between the check above and
+                        // this callback running - never let a background timer callback
+                        // take down the whole application.
+                        Debug.WriteLine($"DarkReader: closed-window reconnect failed: {ex}");
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                // Same rationale as above: this runs on a thread-pool timer thread, so an
+                // unhandled exception here would crash the whole process.
+                Debug.WriteLine($"DarkReader: closed-window rescan failed: {ex}");
+            }
         }
 
         private void UpdateTrayTip()
@@ -704,12 +1152,23 @@ namespace DarkReader
             {
                 string mode = effectActive ? $"Mode {currentMode}" : "Off";
                 string target;
-                if (_useWindow)
-                    target = $" [Window: {_targetWindowTitle}]";
-                else if (_useRegion)
-                    target = $" [{RegionText}]";
-                else
-                    target = " [Fullscreen]";
+
+                lock (controlLock)
+                {
+                    if (_useWindow && _targetWindows.Count > 0)
+                    {
+                        string titles = string.Join(", ", _targetWindows.Values.Take(2));
+                        if (_targetWindows.Count > 2) titles += $" +{_targetWindows.Count - 2}";
+                        target = $" [Windows: {titles}]";
+                    }
+                    else if (_useWindow)
+                        target = " [Windows: none]";
+                    else if (_useRegion)
+                        target = $" [{RegionText}]";
+                    else
+                        target = " [Fullscreen]";
+                }
+
                 trayIcon.Text = $"DarkReader - {mode}{target}";
             }
         }
@@ -754,14 +1213,10 @@ namespace DarkReader
                 _useRegion = true;
             }
 
-            // Restore window tracking
-            if (Settings.Current.UseWindow && !string.IsNullOrEmpty(Settings.Current.TargetWindowTitle))
+            // Restore window tracking for multiple windows
+            if (Settings.Current.UseWindow && Settings.Current.TargetWindowTitles.Count > 0)
             {
-                var hwnd = WindowTracker.FindWindowByTitle(Settings.Current.TargetWindowTitle);
-                if (hwnd != IntPtr.Zero)
-                {
-                    StartWindowTracking(hwnd);
-                }
+                RestoreMultiWindowTracking();
             }
 
             // Restore saved mode (activates effect)
@@ -789,6 +1244,7 @@ namespace DarkReader
             }
             RemoveForegroundHook();
             UnregisterHotKeys();
+            _closedWindowRescanTimer?.Dispose();
             StopWindowTracking();
             EnsureRegionOverlayDestroyed();
             trayIcon?.Dispose();
@@ -811,6 +1267,7 @@ namespace DarkReader
         {
             if (disposing)
             {
+                _closedWindowRescanTimer?.Dispose();
                 _windowTracker?.Dispose();
                 _regionOverlay?.Dispose();
                 trayIcon?.Dispose();
