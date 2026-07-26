@@ -73,10 +73,12 @@ namespace DarkReader
                         Current.ClosedWindowTitles = new List<string>();
 
                     // Migrate legacy TargetWindowTitle to TargetWindowTitles
-                    if (!string.IsNullOrEmpty(Current.TargetWindowTitle) &&
-                        !Current.TargetWindowTitles.Contains(Current.TargetWindowTitle))
+                    if (!string.IsNullOrEmpty(Current.TargetWindowTitle))
                     {
-                        Current.TargetWindowTitles.Add(Current.TargetWindowTitle);
+                        if (!Current.TargetWindowTitles.Contains(Current.TargetWindowTitle))
+                        {
+                            Current.TargetWindowTitles.Add(Current.TargetWindowTitle);
+                        }
                         Current.TargetWindowTitle = null; // Clear after migration
                         Save();
                     }
