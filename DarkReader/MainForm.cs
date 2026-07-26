@@ -647,7 +647,7 @@ namespace DarkReader
                 {
                     isTracked = _targetWindows.ContainsKey(hwnd);
                     // ponytail: match by title for reopened windows (hwnd changes on recreation)
-                    isReopenedClosed = !isTracked && _targetWindows.Values.Contains(title);
+                    isReopenedClosed = !isTracked && _closedWindowTitles.Contains(title);
                     if (isReopenedClosed)
                     {
                         // Rebind new hwnd to existing tracked title
