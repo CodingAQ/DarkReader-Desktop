@@ -354,7 +354,7 @@ namespace DarkReader
                 else
                 {
                     // Partially or fully visible - show overlay with region shape
-                     // Clear stale fullscreen effect: double-applying inverts the inversion
+                    // Clear stale fullscreen effect: double-applying inverts the inversion
                     BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                     EnsureRegionOverlay(region);
                     _regionOverlay.ApplyColorEffect(currentMatrix);
@@ -365,7 +365,7 @@ namespace DarkReader
             else if (_useRegion && _region.HasValue)
             {
                 // Manual region mode - use rectangle
-                 // Clear stale fullscreen effect: double-applying inverts the inversion
+                // Clear stale fullscreen effect: double-applying inverts the inversion
                 BuiltinMatrices.ApplyMatrix(BuiltinMatrices.Identity);
                 bool regionChanged = _region.Value != _lastAppliedRegion;
                 var regionInfo = new RegionInfo
@@ -674,7 +674,7 @@ namespace DarkReader
                         isTracked = _targetWindows.ContainsKey(hwnd);
                     }
 
-                     // Match by title for reopened windows (hwnd changes on recreation)
+                    // Match by title for reopened windows (hwnd changes on recreation)
                     bool reconnected = !isTracked && TryReconnectClosedWindow(hwnd, title);
                     if (reconnected)
                         anyReconnected = true;
