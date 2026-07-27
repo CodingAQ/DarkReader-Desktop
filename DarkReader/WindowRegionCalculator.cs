@@ -40,7 +40,7 @@ namespace DarkReader
             }
             catch
             {
-                return false; // ponytail: DWM call fails on GDI windows — assume not cloaked
+                return false; // If cloaking detection fails, assume the window is not cloaked
             }
         }
 
