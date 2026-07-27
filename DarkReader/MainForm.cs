@@ -1219,8 +1219,8 @@ namespace DarkReader
                 RestoreMultiWindowTracking();
             }
 
-            // Restore saved mode (activates effect)
-            if (Settings.Current.ActiveMode >= 0)
+            // Restore saved mode (only activate if Active On Startup is enabled)
+            if (Settings.Current.ActiveOnStartup && Settings.Current.ActiveMode >= 0)
             {
                 SetMode(Settings.Current.ActiveMode);
             }
