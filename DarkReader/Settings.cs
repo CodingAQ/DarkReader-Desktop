@@ -33,6 +33,10 @@ namespace DarkReader
 
         public int ActiveMode { get; set; } = -1;
         public bool ActiveOnStartup { get; set; } = false;
+        // Effect scope: 0 = Full Screen, 1 = Region, 2 = Window.
+        // Authoritative source for which scope to restore on startup —
+        // deliberately independent of whether region/window data still exists.
+        public int EffectScope { get; set; } = 0;
         public bool SmoothTransitions { get; set; } = true;
         private int _updateIntervalMs = 100;
         public int UpdateIntervalMs
@@ -80,6 +84,13 @@ namespace DarkReader
                             Current.TargetWindowTitles.Add(Current.TargetWindowTitle);
                         }
                         Current.TargetWindowTitle = null; // Clear after migration
+                        Save();
+                    }
+
+                    // Migrate legacy UseRegion/UseWindow → EffectScope
+                    if (Current.EffectScope == 0 && (Current.UseWindow || Current.UseRegion))
+                    {
+                        Current.EffectScope = Current.UseWindow ? 2 : 1;
                         Save();
                     }
                 }
