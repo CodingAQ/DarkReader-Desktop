@@ -566,9 +566,12 @@ namespace DarkReader
             StopWindowTracking();
             if (scope != 1) _region = null;
 
-            _effectScope = scope;
-            _useRegion = (scope == 1);
-            _useWindow = (scope == 2);
+            lock (controlLock)
+            {
+                _effectScope = scope;
+                _useRegion = (scope == 1);
+                _useWindow = (scope == 2);
+            }
 
             Settings.Current.EffectScope = scope;
             Settings.Current.UseRegion = _useRegion;
@@ -820,9 +823,12 @@ namespace DarkReader
             _windowTracker?.Dispose();
             _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
             _windowTracker.StartTracking(hwnds, OnWindowChanged, OnTargetWindowClosed);
-            _useWindow = true;
-            _useRegion = false;
-            _effectScope = 2;
+            lock (controlLock)
+            {
+                _useWindow = true;
+                _useRegion = false;
+                _effectScope = 2;
+            }
         }
 
         private void SaveWindowSettings()
@@ -1214,14 +1220,20 @@ namespace DarkReader
                         _region = new Rectangle(
                             Settings.Current.RegionX, Settings.Current.RegionY,
                             Settings.Current.RegionWidth, Settings.Current.RegionHeight);
-                        _useRegion = true;
-                        _useWindow = false;
-                        _effectScope = 1;
+                        lock (controlLock)
+                        {
+                            _useRegion = true;
+                            _useWindow = false;
+                            _effectScope = 1;
+                        }
                     }
                     else
                     {
                         // Region data missing — fall back to full screen
-                        _effectScope = 0;
+                        lock (controlLock)
+                        {
+                            _effectScope = 0;
+                        }
                         Settings.Current.EffectScope = 0;
                         Settings.Current.UseRegion = false;
                         Settings.Current.UseWindow = false;
@@ -1230,16 +1242,22 @@ namespace DarkReader
                     break;
 
                 case 2: // Window — always restore tracking mode, even with no live windows
-                    _useWindow = true;
-                    _useRegion = false;
-                    _effectScope = 2;
+                    lock (controlLock)
+                    {
+                        _useWindow = true;
+                        _useRegion = false;
+                        _effectScope = 2;
+                    }
                     RestoreMultiWindowTracking();
                     break;
 
                 default: // Full Screen
-                    _useRegion = false;
-                    _useWindow = false;
-                    _effectScope = 0;
+                    lock (controlLock)
+                    {
+                        _useRegion = false;
+                        _useWindow = false;
+                        _effectScope = 0;
+                    }
                     break;
             }
 
