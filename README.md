@@ -19,7 +19,7 @@ DarkReader-Desktop 是一个 Windows 系统托盘应用，将整个屏幕或指�
 
 | Before | After |
 |--------|-------|
-| <img src="docs/screenshot-before.png" alt="Before" style="zoom:75%;" /> | <img src="docs/screenshot-dark-mode.png" alt="After" style="zoom:75%;" /> |
+| <img src="docs/Before v.1.0.2.png" alt="Before"/> | <img src="docs/After v.1.0.2.png" alt="After"/> |
 
 
 
@@ -28,6 +28,14 @@ DarkReader-Desktop 是一个 Windows 系统托盘应用，将整个屏幕或指�
 - **多种预设色彩模式**：默认（简单反色） + 预设1-5 + 灰度模式
 - **跟随窗口**：将效果限定在指定窗口
 - **自定义区域**：将效果限定在指定矩形区域
+
+
+## 推荐设置
+1. 关闭 **贴靠窗口** 中的 **显示贴靠布局**：
+<img src="docs/关闭贴靠窗口.png" alt="关闭贴靠窗口"/>
+2. 关闭 **窗口阴影**：
+<img src="docs/关闭窗口阴影.png" alt="关闭窗口阴影"/>
+
 
 ## 下载与安装
 
@@ -77,7 +85,6 @@ DarkReader 支持将翻转效果应用到指定目标窗口：
 | 操作 | 效果 |
 |------|------|
 | 菜单 → **Select Window** → 选择窗口 | 从列表中选择一个或多个目标窗口 |
-| 菜单 → **Clear Window Target** | 清除窗口目标，恢复全屏区域 |
 
 > 窗口被其他窗口遮挡时，滤镜只覆盖可见部分
 > 支持多选，可同时追踪多个窗口
@@ -88,8 +95,7 @@ DarkReader 支持将翻转效果限制在屏幕的指定区域：
 
 | 操作 | 效果 |
 |------|------|
-| 菜单 → **Select Region** （`Win + Alt + R`） | 进入区域选择模式 |
-| 菜单 → **Clear Region** | 清除选择区域，恢复全屏区域 |
+| 菜单 → **Select Region** （快捷键`Win + Alt + R`） | 进入区域选择模式 |
 
 
 

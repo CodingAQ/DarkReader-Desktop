@@ -19,13 +19,22 @@ DarkReader-Desktop is a Windows system tray application that switches the entire
 
 | Before | After |
 |--------|-------|
-| <img src="docs/screenshot-before.png" alt="Before" style="zoom:75%;" /> | <img src="docs/screenshot-dark-mode.png" alt="After" style="zoom:75%;" /> |
+| <img src="docs/Before v.1.0.2.png" alt="Before"/> | <img src="docs/After v.1.0.2.png" alt="After"/> |
 
 ## Features
 
 - **Multiple preset color modes**: Default (simple inversion) + Preset 1-5 + Grayscale
 - **Window following**: restrict the effect to a specific window
 - **Custom region**: restrict the effect to a specific rectangular area
+
+
+## Recommended Settings
+
+1. Turn off **Snap layouts** in **Snap windows**:
+<img src="docs/关闭贴靠窗口.png" alt="关闭贴靠窗口"/>
+2. Turn off **Window shadows**:
+<img src="docs/关闭窗口阴影.png" alt="关闭窗口阴影"/>
+
 
 ## Download & Install
 
@@ -76,7 +85,6 @@ DarkReader can apply the inversion effect only to a specific window:
 | Action | Effect |
 |--------|--------|
 | Menu → **Select Window** → pick a window(s) | Choose one or more target windows from the list |
-| Menu → **Clear Window Target** | Clear the window target, restore fullscreen |
 
 > When the window is obscured by other windows, the filter only covers the visible parts.
 > Supports multiple selection, can track multiple windows simultaneously.
@@ -88,7 +96,6 @@ DarkReader can restrict the inversion effect to a specific screen region:
 | Action | Effect |
 |--------|--------|
 | Menu → **Select Region** (`Win + Alt + R`) | Enter region selection mode |
-| Menu → **Clear Region** | Clear the selected region, restore fullscreen |
 
 ## 7 Color Modes
 
