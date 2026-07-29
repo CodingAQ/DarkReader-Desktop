@@ -50,6 +50,10 @@ namespace DarkReader
         private Dictionary<IntPtr, string> _targetWindows = new Dictionary<IntPtr, string>();
         private HashSet<string> _closedWindowTitles = new HashSet<string>();
         private bool _useWindow = false;
+        // Effect scope mirrors Settings.EffectScope: 0=Full Screen, 1=Region, 2=Window.
+        // Authoritative runtime source for which scope is active; _useRegion/_useWindow
+        // are derived from it and kept in sync via SetScope / restore logic.
+        private int _effectScope = 0;
         private System.Threading.Timer _closedWindowRescanTimer;
         private const int ClosedWindowRescanIntervalMs = 1000;
 
@@ -110,54 +114,52 @@ namespace DarkReader
             contextMenu.Items.Add(mode7Item);
             contextMenu.Items.Add(new ToolStripSeparator());
 
-            // Region restriction menu
-            var selectRegionItem = new ToolStripMenuItem("Select Region", null, OnSelectRegionClick);
-            var clearRegionItem = new ToolStripMenuItem("Clear Region", null, OnClearRegionClick);
+            // Scope menu: explicit full-screen / region / window selection.
+            // Scope is driven by Settings.EffectScope rather than by whether
+            // region/window data exists, so restarts always restore the last
+            // scope even if the target window was closed during shutdown.
+            var fullScreenItem = new ToolStripMenuItem("Full Screen", null, (s, e) => SetScope(0));
+            var selectRegionItem = new ToolStripMenuItem("Select Region...", null, OnSelectRegionClick);
+            var selectWindowItem = new ToolStripMenuItem("Select Windows");
+            contextMenu.Items.Add(fullScreenItem);
             contextMenu.Items.Add(selectRegionItem);
-            contextMenu.Items.Add(clearRegionItem);
-            contextMenu.Items.Add(new ToolStripSeparator());
-
-            // Window targeting menu
-            var selectWindowItem = new ToolStripMenuItem("Select Window");
-            var clearWindowItem = new ToolStripMenuItem("Clear Window Target", null, OnClearWindowClick);
-            var startupItem = new ToolStripMenuItem("Active On Startup", null, OnToggleStartup) { Checked = Settings.Current.ActiveOnStartup };
             contextMenu.Items.Add(selectWindowItem);
-            contextMenu.Items.Add(clearWindowItem);
-            contextMenu.Items.Add(startupItem);
             contextMenu.Items.Add(new ToolStripSeparator());
 
             // Populate window list when dropdown opens
             selectWindowItem.DropDownOpening += (s, e) => PopulateWindowList(selectWindowItem);
 
-            // Frame rate
+            // Settings
+            var startupItem = new ToolStripMenuItem("Active On Startup", null, OnToggleStartup) { Checked = Settings.Current.ActiveOnStartup };
             var fpsItem = new ToolStripMenuItem("Frame Rate", null, OnFrameRateClick);
-
-            var exitItem = new ToolStripMenuItem("Exit", null, OnExitClick);
+            contextMenu.Items.Add(startupItem);
             contextMenu.Items.Add(fpsItem);
             contextMenu.Items.Add(new ToolStripSeparator());
+
+            var exitItem = new ToolStripMenuItem("Exit", null, OnExitClick);
             contextMenu.Items.Add(exitItem);
 
             contextMenu.Opening += (s, e) =>
             {
                 UpdateMenuCheckmarks(toggleItem, mode1Item, mode2Item, mode3Item, mode4Item, mode5Item, mode6Item, mode7Item);
-                selectRegionItem.Checked = _useRegion && !_useWindow;
-                selectRegionItem.Text = (_useRegion && !_useWindow) ? $"Region: {RegionText}" : "Select Region...";
+
+                fullScreenItem.Checked = (_effectScope == 0);
+
+                selectRegionItem.Checked = (_effectScope == 1);
+                selectRegionItem.Text = (_effectScope == 1) ? $"Region: {RegionText}" : "Select Region...";
 
                 string windowText;
                 bool windowChecked;
-                bool windowEnabled;
                 lock (controlLock)
                 {
-                    windowChecked = _useWindow;
-                    windowEnabled = _useWindow;
-                    windowText = _useWindow
+                    windowChecked = (_effectScope == 2);
+                    windowText = (_effectScope == 2)
                         ? $"Windows: {(_targetWindows.Count > 0 ? string.Join(", ", _targetWindows.Values.Take(2)) + (_targetWindows.Count > 2 ? $" +{_targetWindows.Count - 2}" : "") : "none")}"
-                        : "Select Window...";
+                        : "Select Windows";
                 }
 
                 selectWindowItem.Checked = windowChecked;
                 selectWindowItem.Text = windowText;
-                clearWindowItem.Enabled = windowEnabled;
                 startupItem.Checked = Settings.Current.ActiveOnStartup;
             };
 
@@ -553,46 +555,48 @@ namespace DarkReader
             UpdateTrayTip();
         }
 
-        private void OnSelectRegionClick(object sender, EventArgs e)
-        {
-            this.BeginInvoke(new Action(() =>
-            {
-                // Stop window tracking if active
-                StopWindowTracking();
-
-                using var selector = new RegionSelectorForm();
-                if (selector.ShowDialog() == DialogResult.OK && !selector.Cancelled)
-                {
-                    _region = selector.SelectedRegion;
-                    _useRegion = true;
-                    _useWindow = false;
-
-                    Settings.Current.UseRegion = true;
-                    Settings.Current.UseWindow = false;
-                    Settings.Current.RegionX = _region.Value.X;
-                    Settings.Current.RegionY = _region.Value.Y;
-                    Settings.Current.RegionWidth = _region.Value.Width;
-                    Settings.Current.RegionHeight = _region.Value.Height;
-                    Settings.Save();
-
-                    lock (controlLock) { Monitor.Pulse(controlLock); }
-                    UpdateTrayTip();
-                }
-            }));
-        }
-
-        private void OnClearRegionClick(object sender, EventArgs e)
+        /// <summary>
+        /// Switch the effect scope (0=Full Screen, 1=Region, 2=Window) and persist it.
+        /// Stops window tracking and clears the manual region for non-region scopes so
+        /// _useRegion/_useWindow stay in sync with _effectScope. Region coordinates are
+        /// preserved in Settings so re-selecting Region mode can reuse the last rectangle.
+        /// </summary>
+        private void SetScope(int scope)
         {
             StopWindowTracking();
-            _useRegion = false;
-            _useWindow = false;
-            _region = null;
-            Settings.Current.UseRegion = false;
-            Settings.Current.UseWindow = false;
+            if (scope != 1) _region = null;
+
+            lock (controlLock)
+            {
+                _effectScope = scope;
+                _useRegion = (scope == 1);
+                _useWindow = (scope == 2);
+            }
+
+            Settings.Current.EffectScope = scope;
+            Settings.Current.UseRegion = _useRegion;
+            Settings.Current.UseWindow = _useWindow;
             Settings.Save();
 
             lock (controlLock) { Monitor.Pulse(controlLock); }
             UpdateTrayTip();
+        }
+
+        private void OnSelectRegionClick(object sender, EventArgs e)
+        {
+            this.BeginInvoke(new Action(() =>
+            {
+                using var selector = new RegionSelectorForm();
+                if (selector.ShowDialog() == DialogResult.OK && !selector.Cancelled)
+                {
+                    _region = selector.SelectedRegion;
+                    Settings.Current.RegionX = _region.Value.X;
+                    Settings.Current.RegionY = _region.Value.Y;
+                    Settings.Current.RegionWidth = _region.Value.Width;
+                    Settings.Current.RegionHeight = _region.Value.Height;
+                    SetScope(1);
+                }
+            }));
         }
 
         private void PopulateWindowList(ToolStripMenuItem selectWindowItem)
@@ -819,26 +823,25 @@ namespace DarkReader
             _windowTracker?.Dispose();
             _windowTracker = new WindowTracker(Settings.Current.UpdateIntervalMs);
             _windowTracker.StartTracking(hwnds, OnWindowChanged, OnTargetWindowClosed);
-            _useWindow = true;
-            _useRegion = false;
+            lock (controlLock)
+            {
+                _useWindow = true;
+                _useRegion = false;
+                _effectScope = 2;
+            }
         }
 
         private void SaveWindowSettings()
         {
             lock (controlLock)
             {
+                Settings.Current.EffectScope = _effectScope;
                 Settings.Current.UseWindow = _useWindow;
-                Settings.Current.UseRegion = false;
+                Settings.Current.UseRegion = _useRegion;
                 Settings.Current.TargetWindowTitles = new List<string>(_targetWindows.Values);
                 Settings.Current.ClosedWindowTitles = new List<string>(_closedWindowTitles);
             }
             Settings.Save();
-        }
-
-        private void OnClearWindowClick(object sender, EventArgs e)
-        {
-            StopWindowTracking();
-            UpdateTrayTip();
         }
 
         private void OnToggleStartup(object sender, EventArgs e)
@@ -962,6 +965,7 @@ namespace DarkReader
                 _windowTracker.StartTracking(hwndsToTrack, OnWindowChanged, OnTargetWindowClosed);
             }
 
+            Settings.Current.EffectScope = 2;
             Settings.Current.UseWindow = true;
             Settings.Current.UseRegion = false;
             Settings.Save();
@@ -1204,19 +1208,57 @@ namespace DarkReader
         {
             this.Hide();
 
-            // Restore region settings
-            if (Settings.Current.UseRegion && Settings.Current.RegionWidth > 0 && Settings.Current.RegionHeight > 0)
+            // Restore effect scope. This is the authoritative source — it does NOT
+            // depend on whether region/window data still exists, so a restart after
+            // the target window was closed during shutdown still restores window mode
+            // (waiting for the window to reopen) instead of falling back to fullscreen.
+            switch (Settings.Current.EffectScope)
             {
-                _region = new Rectangle(
-                    Settings.Current.RegionX, Settings.Current.RegionY,
-                    Settings.Current.RegionWidth, Settings.Current.RegionHeight);
-                _useRegion = true;
-            }
+                case 1: // Region
+                    if (Settings.Current.RegionWidth > 0 && Settings.Current.RegionHeight > 0)
+                    {
+                        _region = new Rectangle(
+                            Settings.Current.RegionX, Settings.Current.RegionY,
+                            Settings.Current.RegionWidth, Settings.Current.RegionHeight);
+                        lock (controlLock)
+                        {
+                            _useRegion = true;
+                            _useWindow = false;
+                            _effectScope = 1;
+                        }
+                    }
+                    else
+                    {
+                        // Region data missing — fall back to full screen
+                        lock (controlLock)
+                        {
+                            _effectScope = 0;
+                        }
+                        Settings.Current.EffectScope = 0;
+                        Settings.Current.UseRegion = false;
+                        Settings.Current.UseWindow = false;
+                        Settings.Save();
+                    }
+                    break;
 
-            // Restore window tracking for multiple windows
-            if (Settings.Current.UseWindow && Settings.Current.TargetWindowTitles.Count > 0)
-            {
-                RestoreMultiWindowTracking();
+                case 2: // Window — always restore tracking mode, even with no live windows
+                    lock (controlLock)
+                    {
+                        _useWindow = true;
+                        _useRegion = false;
+                        _effectScope = 2;
+                    }
+                    RestoreMultiWindowTracking();
+                    break;
+
+                default: // Full Screen
+                    lock (controlLock)
+                    {
+                        _useRegion = false;
+                        _useWindow = false;
+                        _effectScope = 0;
+                    }
+                    break;
             }
 
             // Restore saved mode (only activate if Active On Startup is enabled)
